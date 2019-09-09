@@ -1,0 +1,9 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+import 0x0.Sym;
+import 0x0.RockPaperScissors;
+
+main() {
+    return;
+}

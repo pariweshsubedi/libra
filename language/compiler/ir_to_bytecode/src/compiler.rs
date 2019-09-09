@@ -1767,7 +1767,7 @@ impl<S: Scope + Sized> Compiler<S> {
             Type::U64 => Ok(SignatureToken::U64),
             Type::Bool => Ok(SignatureToken::Bool),
             Type::ByteArray => Ok(SignatureToken::ByteArray),
-            Type::Reference(is_mutable, inner_type) => {
+            Type::Reference{ is_mut: is_mutable, typ: inner_type } => {
                 let inner_token = Box::new(self.build_signature_token(k, inner_type)?);
                 if *is_mutable {
                     Ok(SignatureToken::MutableReference(inner_token))
@@ -1775,7 +1775,7 @@ impl<S: Scope + Sized> Compiler<S> {
                     Ok(SignatureToken::Reference(inner_token))
                 }
             }
-            Type::Struct(ident, tys) => {
+            Type::Struct{ ident, typ: tys } => {
                 let type_actuals = self.build_type_actuals(k, tys)?;
 
                 let module_name = ident.module().name_ref();
@@ -1818,7 +1818,7 @@ impl<S: Scope + Sized> Compiler<S> {
                 )?;
                 Ok(SignatureToken::Struct(sh_idx, type_actuals))
             }
-            Type::TypeParameter(ty_var) => match k.get(ty_var) {
+            Type::TypeParameter{ tvar: ty_var } => match k.get(ty_var) {
                 Some(idx) => Ok(SignatureToken::TypeParameter(*idx as u16)),
                 None => bail!("no type parameter named {}", ty_var),
             },
@@ -2039,11 +2039,11 @@ impl<S: Scope + Sized> Compiler<S> {
     ) -> Result<ControlFlowInfo> {
         debug!("compile command {}", cmd);
         match cmd {
-            Cmd::Return(exps) => {
+            Cmd::Return{ exp: exps } => {
                 self.compile_expression(k, exps, code, function_frame)?;
                 code.code.push(Bytecode::Ret);
             }
-            Cmd::Abort(exp_opt) => {
+            Cmd::Abort{ exp: exp_opt } => {
                 match exp_opt {
                     Some(exp) => {
                         self.compile_expression(k, exp, code, function_frame)?;
@@ -2053,12 +2053,12 @@ impl<S: Scope + Sized> Compiler<S> {
                 code.code.push(Bytecode::Abort);
                 function_frame.pop()?;
             }
-            Cmd::Assign(lvalues, rhs_expressions) => {
+            Cmd::Assign{ var: lvalues, exp: rhs_expressions } => {
                 let _expr_type =
                     self.compile_expression(k, rhs_expressions, code, function_frame)?;
                 self.compile_lvalues(k, lvalues, code, function_frame)?;
             }
-            Cmd::Unpack(name, tys, bindings, e) => {
+            Cmd::Unpack{ name, types: tys, fields: bindings, exp: e } => {
                 let type_actuals_id = self.make_type_actuals(k, tys)?;
 
                 self.compile_expression(k, e, code, function_frame)?;
@@ -2094,8 +2094,8 @@ impl<S: Scope + Sized> Compiler<S> {
             //   `loop { if (cond) { body; continue; } else { break; } }`
             Cmd::Continue |
             // `return` and `abort` alway makes a terminal node
-            Cmd::Abort(_) |
-            Cmd::Return(_) => (false, true),
+            Cmd::Abort{ exp: _ } |
+            Cmd::Return{ exp: _ } => (false, true),
             Cmd::Break => (true, false),
             _ => (false, false),
         };
@@ -2150,30 +2150,30 @@ impl<S: Scope + Sized> Compiler<S> {
     ) -> Result<VecDeque<InferredType>> {
         debug!("compile  expression {}", exp);
         match exp {
-            Exp::Move(ref x) => self.compile_move_local(&x.value, code, function_frame),
-            Exp::Copy(ref x) => self.compile_copy_local(&x.value, code, function_frame),
-            Exp::BorrowLocal(ref is_mutable, ref x) => {
+            Exp::Move{ var: ref x } => self.compile_move_local(&x.value, code, function_frame),
+            Exp::Copy{ var: ref x } => self.compile_copy_local(&x.value, code, function_frame),
+            Exp::BorrowLocal{ is_mut: ref is_mutable, var: ref x } => {
                 self.compile_borrow_local(&x.value, *is_mutable, code, function_frame)
             }
-            Exp::Value(cv) => match cv.as_ref() {
-                CopyableVal::Address(address) => {
+            Exp::Value{ v: cv } => match cv.as_ref() {
+                CopyableVal::Address{ addr: address } => {
                     let addr_idx = self.make_address(&address)?;
                     code.code.push(Bytecode::LdAddr(addr_idx));
                     function_frame.push()?;
                     Ok(self.make_singleton_vec_deque(InferredType::Address))
                 }
-                CopyableVal::U64(i) => {
+                CopyableVal::U64{ v: i } => {
                     code.code.push(Bytecode::LdConst(*i));
                     function_frame.push()?;
                     Ok(self.make_singleton_vec_deque(InferredType::U64))
                 }
-                CopyableVal::ByteArray(buf) => {
+                CopyableVal::ByteArray{ bytes: buf } => {
                     let buf_idx = self.make_byte_array(buf)?;
                     code.code.push(Bytecode::LdByteArray(buf_idx));
                     function_frame.push()?;
                     Ok(self.make_singleton_vec_deque(InferredType::ByteArray))
                 }
-                CopyableVal::Bool(b) => {
+                CopyableVal::Bool{ v: b } => {
                     if *b {
                         code.code.push(Bytecode::LdTrue);
                     } else {
@@ -2182,9 +2182,9 @@ impl<S: Scope + Sized> Compiler<S> {
                     function_frame.push()?;
                     Ok(self.make_singleton_vec_deque(InferredType::Bool))
                 }
-                CopyableVal::String(_) => bail!("nice try! come back later {:?}", cv),
+                CopyableVal::String{ v: _ } => bail!("nice try! come back later {:?}", cv),
             },
-            Exp::Pack(name, tys, fields) => {
+            Exp::Pack{ name, types: tys, exp: fields } => {
                 let type_actuals_id = self.make_type_actuals(k, tys)?;
 
                 let (_is_resource, def_idx) = self.scope.get_struct_def(name.name_ref())?;
@@ -2202,7 +2202,7 @@ impl<S: Scope + Sized> Compiler<S> {
                 function_frame.push()?;
                 Ok(self.make_singleton_vec_deque(InferredType::Struct(sh_idx)))
             }
-            Exp::UnaryExp(op, e) => {
+            Exp::UnaryExp{ op, exp: e } => {
                 self.compile_expression(k, e, code, function_frame)?;
                 match op {
                     UnaryOp::Not => {
@@ -2211,7 +2211,7 @@ impl<S: Scope + Sized> Compiler<S> {
                     }
                 }
             }
-            Exp::BinopExp(e1, op, e2) => {
+            Exp::BinopExp{ e1, op, e2 } => {
                 self.compile_expression(k, e1, code, function_frame)?;
                 self.compile_expression(k, e2, code, function_frame)?;
                 function_frame.pop()?;
@@ -2282,7 +2282,7 @@ impl<S: Scope + Sized> Compiler<S> {
                     }
                 }
             }
-            Exp::Dereference(e) => {
+            Exp::Dereference{ exp: e } => {
                 let loc_type = self
                     .compile_expression(k, e, code, function_frame)?
                     .pop_front();
@@ -2316,7 +2316,7 @@ impl<S: Scope + Sized> Compiler<S> {
                     None => bail!("Impossible no expression to borrow"),
                 }
             }
-            Exp::FunctionCall(f, exps) => {
+            Exp::FunctionCall{ call: f, exp: exps } => {
                 let mut actuals_tys = VecDeque::new();
                 for types in self.compile_expression(k, exps, code, function_frame)? {
                     actuals_tys.push_back(types);
@@ -2324,7 +2324,7 @@ impl<S: Scope + Sized> Compiler<S> {
                 let result = self.compile_call(k, f, code, function_frame, actuals_tys)?;
                 Ok(result)
             }
-            Exp::ExprList(exps) => {
+            Exp::ExprList{ exprs: exps } => {
                 let mut result = VecDeque::new();
                 for e in exps {
                     result.append(&mut self.compile_expression(k, e, code, function_frame)?);
@@ -2439,7 +2439,7 @@ impl<S: Scope + Sized> Compiler<S> {
                         function_frame.push()?;
                         Ok(self.make_singleton_vec_deque(InferredType::Address))
                     }
-                    Builtin::Exists(name, tys) => {
+                    Builtin::Exists{ name, types: tys } => {
                         let type_actuals_id = self.make_type_actuals(k, tys)?;
 
                         let (_, def_idx) = self.scope.get_struct_def(name.name_ref())?;
@@ -2448,7 +2448,7 @@ impl<S: Scope + Sized> Compiler<S> {
                         function_frame.push()?;
                         Ok(self.make_singleton_vec_deque(InferredType::Bool))
                     }
-                    Builtin::BorrowGlobal(name, tys) => {
+                    Builtin::BorrowGlobal{ name, types: tys } => {
                         let type_actuals_id = self.make_type_actuals(k, tys)?;
 
                         let (_is_resource, def_idx) = self.scope.get_struct_def(name.name_ref())?;
@@ -2471,7 +2471,7 @@ impl<S: Scope + Sized> Compiler<S> {
                         function_frame.push()?;
                         Ok(VecDeque::new())
                     }
-                    Builtin::MoveFrom(name, tys) => {
+                    Builtin::MoveFrom{ name, types: tys } => {
                         let type_actuals_id = self.make_type_actuals(k, tys)?;
 
                         let (_is_always_resource, def_idx) =
@@ -2484,7 +2484,7 @@ impl<S: Scope + Sized> Compiler<S> {
                         let sh_idx = sd.struct_handle;
                         Ok(self.make_singleton_vec_deque(InferredType::Struct(sh_idx)))
                     }
-                    Builtin::MoveToSender(name, tys) => {
+                    Builtin::MoveToSender{ name, types: tys } => {
                         let type_actuals_id = self.make_type_actuals(k, tys)?;
 
                         let (_, def_idx) = self.scope.get_struct_def(name.name_ref())?;

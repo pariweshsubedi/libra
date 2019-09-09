@@ -1,0 +1,53 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+import 0x0.LibraCoin;
+import 0x0.LibraAccount;
+import 0x0.MultiWallet2Of3;
+import 0x0.Sym;
+
+main() {
+    let o1: address;
+    let o2: address;
+    let o3: address;
+    let dst: address;
+    let sender: address;
+    let o2deposit: u64;
+    let o2money: LibraCoin.T;
+    let o2balance: u64;
+    let o2balance_sym: u64;
+    let o3balance: u64;
+    let o3balance_sym: u64;
+    let dst_balance: u64;
+    let dst_balance_sym: u64;
+
+    o1 = Sym.fresh_address("owner1", 0x00000000000000000000000000000001);
+    o2 = Sym.fresh_address("owner2", 0x00000000000000000000000000000002);
+    o3 = Sym.fresh_address("owner3", 0x00000000000000000000000000000003);
+    dst = Sym.fresh_address("dst", 0x00000000000000000000000000000004);
+    sender = get_txn_sender();
+    assert(copy(sender) == copy(o2), 99);
+
+    // have o2 deposit some monies as well into multiwallet stored at o1
+    // extract some money from o1's balance
+    o2deposit = Sym.fresh_u64("o2deposit", 100);
+    o2money = LibraAccount.withdraw_from_sender(copy(o2deposit));
+
+    o2balance = LibraAccount.balance(copy(o2));
+    o2balance_sym = Sym.fresh_u64("o2_init_balance", 5);
+    assert(copy(o2balance_sym) == copy(o2balance), 99);
+
+    o3balance = LibraAccount.balance(copy(o3));
+    o3balance_sym = Sym.fresh_u64("o3_init_balance", 5);
+    assert(copy(o3balance_sym) == copy(o3balance), 99);
+
+    dst_balance = LibraAccount.balance(copy(dst));
+    dst_balance_sym = Sym.fresh_u64("dst_init_balance", 5);
+    assert(copy(dst_balance_sym) == copy(dst_balance), 99);
+
+    // put some money into multiwallet
+    MultiWallet2Of3.deposit(copy(o1), move(o2money));
+
+    return;
+}
+

@@ -1,0 +1,22 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+import 0x0.RockPaperScissors;
+import 0x0.Sym;
+import 0x0.Log;
+
+main() {
+    let a1: address;
+    let a2: address;
+    let sender: address;
+
+    a2 = Sym.fresh_address("player2", 0x00000000000000000000000000000002);
+    sender = get_txn_sender();
+    assert(copy(sender) == copy(a2), 99);
+
+    RockPaperScissors.player2_other_player_nonresponsive();
+
+    Log.log("tx3 complete");
+
+    return;
+}

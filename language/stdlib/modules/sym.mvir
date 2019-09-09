@@ -1,0 +1,16 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+module Sym {
+    public fresh_address(name: bytearray, default: address): address {
+        return move(default);
+    }
+
+    public fresh_bytearray(name: bytearray, default: bytearray): bytearray {
+        return move(default);
+    }
+
+    public fresh_u64(name: bytearray, default: u64): u64 {
+        return move(default);
+    }
+}

@@ -1,0 +1,20 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+import 0x0.Sym;
+import 0x0.LNSOprah;
+
+main() {
+    let name: bytearray;
+    let sender: address;
+    let o1: address;
+
+    sender = get_txn_sender();
+    o1 = Sym.fresh_address("o1", 0x1);
+
+    assert(move(sender) != move(o1), 99);
+
+    LNSOprah.abandon();
+
+    return;
+}

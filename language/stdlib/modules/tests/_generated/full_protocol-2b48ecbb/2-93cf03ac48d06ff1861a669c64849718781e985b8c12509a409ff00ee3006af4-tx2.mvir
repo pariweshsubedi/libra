@@ -1,0 +1,31 @@
+import 0x0.LibraCoin;
+import 0x0.LibraAccount;
+import 0x0.RockPaperScissors;
+import 0x0.Sym;
+import 0x0.Verify;
+import 0x0.Log;
+
+main() {
+    let a1: address;
+    let a2: address;
+    let hand2: u64;
+    let bet2_value: u64;
+    let bet2: LibraCoin.T;
+    let sender: address;
+
+    a1 = Sym.fresh_address("player1", 0x168565ae45d4412e7a278f35cd9a1d12a434db332955d8ab35fa46bef4c7a079);
+    a2 = Sym.fresh_address("player2", 0x93cf03ac48d06ff1861a669c64849718781e985b8c12509a409ff00ee3006af4);
+    sender = get_txn_sender();
+    assert(copy(sender) == copy(a2), 99);
+
+    bet2_value = Sym.fresh_u64("player2_bet", 8222);
+    hand2 = Sym.fresh_u64("player2_hand", 2);
+    // assert(copy(hand2) <= 2, 99);
+
+    bet2 = LibraAccount.withdraw_from_sender(copy(bet2_value));
+    RockPaperScissors.player2_bet(copy(a1), move(bet2), copy(hand2));
+
+    Log.log("tx2 complete");
+
+    return;
+}

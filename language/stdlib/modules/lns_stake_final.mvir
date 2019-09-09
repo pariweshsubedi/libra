@@ -1,0 +1,91 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+// This module is a modification of the Oprah LNS, and decouples "stake to
+// buy domain" from "pay for domain". Buyers can now ensure the domain
+// they are paying for will indeed be theirs. The staking step gives them
+// a timestamp and they can examine the chain offline during the staking period
+// to check that nobody else has a stake earlier than their. They can then
+// initiate payment to finalize ownership of domain.
+
+module LNSStakeToBuy {
+    import 0x0.LibraCoin;
+    import 0x0.LibraAccount;
+
+    // If user-defined modules were supported, we could reference them as 0x01.LNSOprah
+    // But until then, we gotta put them in the stdlib and reference from there.
+    import 0x00.LNSOprah;
+
+    // The main resource that is the wrapped domain
+    resource T {
+        // Wrapped domain name
+        wrapped_domain: LNSOprah.T,
+        // overriding inception time
+        inception: u64
+    }
+
+    // The staking resource that provides the timestamp
+    // It only has a holding deposit (to prevent spamming)
+    // That holding deposit has a min, and on buying
+    // is put towards the domain deposit
+    resource Stake {
+        // Domain name
+        name: bytearray,
+        // Inception time
+        inception: u64,
+        // Deposit for keeping the stake
+        staking_deposit: LibraCoin.T
+    }
+
+    public stake(name: bytearray, deposit: LibraCoin.T) {
+        let stamp: Self.Stake;
+        let now: u64;
+        let expiry: u64;
+
+        // get the new expiry time
+        expiry, now = LNSOprah.expiry_time(0, 0, 0);
+
+        // create the stake and send it back to           
+        stamp = Stake { name: copy(name),
+                        inception: copy(now),
+                        staking_deposit: move(deposit)
+                      };
+        move_to_sender<Stake>(move(stamp));
+
+        return;
+    }
+
+    public buy(timestamp: Self.Stake, duration: u64, fee: LibraCoin.T) {
+        let new_domain: Self.T;
+        new_domain = Self.create(move(timestamp), copy(duration), move(fee));
+        move_to_sender<T>(move(new_domain));
+        return;
+    }
+
+    public create(timestamp: Self.Stake, duration: u64, fee: LibraCoin.T): Self.T {
+        let name: bytearray;
+        let start_time: u64;
+        let domain: Self.T;
+        let oprah_domain: LNSOprah.T;
+        let prev_deposit: LibraCoin.T;
+        let paid: LibraCoin.T;
+        let sender_addr: address;
+
+        // deconstruct the stake to get the start time and deposit
+        Stake { name, inception: start_time, staking_deposit: prev_deposit } = move(timestamp);
+
+        //  combine the staking deposit along with the fee paid
+        paid = LibraCoin.join(move(fee), move(prev_deposit));
+
+        // check and get domain if the fees are appropriate
+        oprah_domain = LNSOprah.create(copy(name), copy(duration), move(paid));
+
+        // wrap the domain in our container to serve as output
+        domain = T { 
+                     wrapped_domain: move(oprah_domain),
+                     inception: copy(start_time)
+                   };
+
+        return move(domain);
+    }
+}

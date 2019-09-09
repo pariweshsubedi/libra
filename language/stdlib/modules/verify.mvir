@@ -1,0 +1,23 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+module Verify {
+    import 0x0.Log;
+
+    public verify(conditional: bool) {
+        // Do nothing.
+        // We stub this out during verification.
+        return;
+    }
+
+    public check(conditional: bool, msg: bytearray) {
+        Self.verify(copy(conditional));
+        if (copy(conditional)) {
+            Log.log(h"5665726966696564");
+        } else {
+            Log.log(h"4e6f74207665726966696564");
+        }
+
+        return;
+    }
+}

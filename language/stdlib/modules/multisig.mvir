@@ -1,0 +1,231 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+// Implements a simple 2 of 3 multiwallet
+
+module MultiWallet2Of3 {
+    import 0x0.LibraCoin;
+    import 0x0.LibraAccount;
+
+    resource MultiAccount {
+        // 3 owner addresses
+        owner1: address,
+        owner2: address,
+        owner3: address,
+        // coin protected by this multiwallet
+        coin: LibraCoin.T,
+    }
+
+    resource Auth {
+        // authorize at most a certain amount of coin
+        value: u64,
+        // the destination for which this is authorized
+        dst: address,
+    }
+
+    // inits a multi account with specified 3 addresses
+    public init(o1: address, o2: address, o3: address) {
+        let multi: Self.MultiAccount;
+        let zero: LibraCoin.T;
+
+        // Each account address should be distinct
+        assert(copy(o1) != copy(o2), 11);
+        assert(copy(o1) != copy(o3), 22);
+        assert(copy(o2) != copy(o3), 33);
+
+        // create zero coin
+        zero = LibraCoin.zero();
+
+        // create a multi account
+        multi = MultiAccount {
+            owner1: copy(o1),
+            owner2: copy(o2),
+            owner3: copy(o3),
+            coin: move(zero),
+        };
+
+        // move it to sender
+        move_to_sender<MultiAccount>(move(multi));
+
+        return;
+    }
+
+    // check that each address has authorized
+    public send(multi_loc: address, amt: u64, dst: address) acquires MultiAccount, Auth {
+        let o1: address;
+        let o2: address;
+        let o3: address;
+        let o1_has_auth: bool;
+        let o2_has_auth: bool;
+        let o3_has_auth: bool;
+        let num_auth: u64;
+        let coin: LibraCoin.T;
+        let sender: address;
+
+        sender = get_txn_sender();
+        o1, o2, o3 = Self.addresses(copy(multi_loc));
+        assert((copy(sender) == copy(o1))
+               || (copy(sender) == copy(o2))
+               || (copy(sender) == copy(o3)), 99);
+
+        o1_has_auth = Self.has_authorized(copy(o1), copy(amt), copy(dst));
+        o2_has_auth = Self.has_authorized(copy(o2), copy(amt), copy(dst));
+        o3_has_auth = Self.has_authorized(copy(o3), copy(amt), copy(dst));
+
+        num_auth = 0;
+        if (copy(o1_has_auth)) {
+            num_auth = copy(num_auth) + 1;
+            // will revert if num_auths are not sufficient, so ok to optimistically destruct
+            Self.destruct_auth(copy(o1));
+        }
+        if (copy(o2_has_auth)) {
+            num_auth = copy(num_auth) + 1;
+            // will revert if num_auths are not sufficient, so ok to optimistically destruct
+            Self.destruct_auth(copy(o2));
+        }
+        if (copy(o3_has_auth)) {
+            num_auth = copy(num_auth) + 1;
+            // will revert if num_auths are not sufficient, so ok to optimistically destruct
+            Self.destruct_auth(copy(o3));
+        }
+
+        // make sure at least 2/3 have authorized
+        assert(copy(num_auth) >= 2, 99);
+
+        // two of three have authorized, we can deduct that amount from the multi
+        coin = Self.deduct(copy(multi_loc), copy(amt));
+
+        // deposit to the locations that k owners authorized this to go
+        LibraAccount.deposit(copy(dst), move(coin));
+
+
+        return;
+    }
+
+    destruct_auth(owner: address) acquires Auth {
+        let auth: Self.Auth;
+        let v: u64;
+        let d: address;
+
+        auth = move_from<Auth>(copy(owner));
+        Auth { value: v, dst: d } = move(auth);
+        return;
+    }
+
+    // the deposit will pull the multi from whereever its stored
+    // update it to contain the combined deposit
+    // An interesting property is that the wallet is held at the
+    // location that last deposited to the wallet
+    public deposit(multi_loc: address, credit: LibraCoin.T) acquires MultiAccount {
+        let combined: LibraCoin.T;
+        let sender: address;
+        let multi_ref: &mut Self.MultiAccount;
+        let coin_ref: &mut LibraCoin.T;
+
+        multi_ref = borrow_global<MultiAccount>(copy(multi_loc));
+        coin_ref = &mut move(multi_ref).coin;
+
+        // deposit the amount into the coin of the multiwallet
+        LibraCoin.deposit(move(coin_ref), move(credit));
+
+        return;
+    }
+
+    // this will destruct the multi wallet, split the coin (amt + remain), will revert
+    // if the multiwallet does not have sufficient funds, and return the amt coin
+    deduct(multi_loc: address, amt: u64): LibraCoin.T acquires MultiAccount {
+        let deducted: LibraCoin.T;
+        let multi_ref: &mut Self.MultiAccount;
+        let coin_ref: &mut LibraCoin.T;
+
+        multi_ref = borrow_global<MultiAccount>(copy(multi_loc));
+        coin_ref = &mut move(multi_ref).coin;
+
+        // merge the deposit with what was in the account
+        deducted = LibraCoin.withdraw(move(coin_ref), copy(amt));
+
+        return move(deducted);
+    }
+
+    public authorize(max_amt: u64, dst: address) {
+        let auth: Self.Auth;
+
+        auth = Auth {
+            value: copy(max_amt),
+            dst: copy(dst),
+        };
+        move_to_sender<Auth>(move(auth));
+
+        return;
+    }
+
+    // in case consensus cannot be reached, a user should be free to abandon
+    // their authorization. if this function did not exist then we could deadlock
+    public abandon_auth() acquires Auth {
+        let auth: Self.Auth;
+        let sender: address;
+        let v: u64;
+        let d: address;
+
+        // pull the auth from the sender
+        sender = get_txn_sender();
+        auth = move_from<Auth>(copy(sender));
+
+        // unpack the authorization
+        Auth {
+            value: v,
+            dst: d,
+        } = move(auth);
+
+        // not doing anything with the authorization destructs it
+
+        return;
+    }
+
+    // this checks if the owner specified has an authorization for the amount
+    // its ok for the owner to NOT have the authorization (this fn should NOT revert)
+    // it should return false in the case of no authorization present
+    public has_authorized(owner: address, amt: u64, dst: address): bool acquires Auth {
+        let auth_ref: &mut Self.Auth;
+        let auth_amt: u64;
+        let auth_dst: address;
+        let auth_exists: bool;
+        let authorized: bool;
+
+        // if auth does not exist at address then default not authorized
+        auth_exists = exists<Auth>(copy(owner));
+        if (!copy(auth_exists)) {
+            return false;
+        }
+
+        // Auth exists at owner; lets check that is authorizes for this dst
+        auth_ref = borrow_global<Auth>(copy(owner));
+        auth_amt = *(&mut copy(auth_ref).value);
+        auth_dst = *(&mut move(auth_ref).dst);
+
+        // if same destination and authorized for more than amount then ok
+        authorized = false;
+        if ((copy(auth_dst) == copy(dst))
+            && (copy(auth_amt) >= copy(amt))) {
+            authorized = true;
+        }
+
+        return copy(authorized);
+    }
+
+    // returns the set of owners of a multiwallet
+    // reverts if the sender is not one of the owners
+    addresses(multi_loc: address): address * address * address acquires MultiAccount {
+        let multi_ref: &mut Self.MultiAccount;
+        let o1: address;
+        let o2: address;
+        let o3: address;
+
+        multi_ref = borrow_global<MultiAccount>(copy(multi_loc));
+        o1 = *(&mut copy(multi_ref).owner1);
+        o2 = *(&mut copy(multi_ref).owner2);
+        o3 = *(&mut move(multi_ref).owner3);
+
+        return copy(o1), copy(o2), copy(o3);
+    }
+}

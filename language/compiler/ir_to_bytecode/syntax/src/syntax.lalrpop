@@ -57,11 +57,11 @@ Field: Field = {
 };
 
 CopyableVal: CopyableVal = {
-    AccountAddress => CopyableVal::Address(<>),
-    "true" => CopyableVal::Bool(true),
-    "false" => CopyableVal::Bool(false),
-    <i: U64> => CopyableVal::U64(i),
-    <buf: ByteArray> => CopyableVal::ByteArray(buf),
+    AccountAddress => CopyableVal::Address{ addr: <> },
+    "true" => CopyableVal::Bool{ v: true },
+    "false" => CopyableVal::Bool{ v: false },
+    <i: U64> => CopyableVal::U64{ v: i },
+    <buf: ByteArray> => CopyableVal::ByteArray{ bytes: buf },
 }
 
 Exp = BinopExp;
@@ -69,7 +69,7 @@ Exp_ = Sp<Exp>;
 
 Tier<Op, NextTier>: Exp = {
     <e1: Sp<<Tier<Op,NextTier>>>> <o: Op> <e2: Sp<<NextTier>>> => {
-        Exp::BinopExp(Box::new(e1), o, Box::new(e2))
+        Exp::BinopExp{ e1: Box::new(e1), op: o, e2: Box::new(e2) }
     },
     NextTier
 };
@@ -145,8 +145,8 @@ QualifiedFunctionName : FunctionCall = {
 }
 
 UnaryExp : Exp = {
-    "!" <e: Sp<UnaryExp>> => Exp::UnaryExp(UnaryOp::Not, Box::new(e)),
-    "*" <e: Sp<UnaryExp>> => Exp::Dereference(Box::new(e)),
+    "!" <e: Sp<UnaryExp>> => Exp::UnaryExp{ op: UnaryOp::Not, exp: Box::new(e) },
+    "*" <e: Sp<UnaryExp>> => Exp::Dereference{ exp: Box::new(e) },
     "&mut " <e: Sp<UnaryExp>> "." <f: Field> => {
         Exp::Borrow{ is_mutable: true, exp: Box::new(e), field: f }
     },
@@ -157,11 +157,11 @@ UnaryExp : Exp = {
 }
 
 Call: Exp = {
-    <f: QualifiedFunctionName> <exp: Sp<CallOrTerm>> => Exp::FunctionCall(f, Box::new(exp)),
+    <f: QualifiedFunctionName> <exp: Sp<CallOrTerm>> => Exp::FunctionCall{ call: f, exp: Box::new(exp) },
 }
 
 CallOrTerm: Exp = {
-    <f: QualifiedFunctionName> <exp: Sp<CallOrTerm>> => Exp::FunctionCall(f, Box::new(exp)),
+    <f: QualifiedFunctionName> <exp: Sp<CallOrTerm>> => Exp::FunctionCall{ call: f, exp: Box::new(exp) },
     Term,
 }
 
@@ -170,20 +170,20 @@ FieldExp: (Field, Exp_) = {
 }
 
 Term: Exp = {
-    "move(" <v: Sp<Var>> ")" => Exp::Move(v),
-    "copy(" <v: Sp<Var>> ")" => Exp::Copy(v),
-    "&mut " <v: Sp<Var>> => Exp::BorrowLocal(true, v),
-    "&" <v: Sp<Var>> => Exp::BorrowLocal(false, v),
-    Sp<CopyableVal> => Exp::Value(<>),
+    "move(" <v: Sp<Var>> ")" => Exp::Move{ var: v },
+    "copy(" <v: Sp<Var>> ")" => Exp::Copy{ var: v },
+    "&mut " <v: Sp<Var>> => Exp::BorrowLocal{ is_mut: true, var: v },
+    "&" <v: Sp<Var>> => Exp::BorrowLocal{ is_mut: false, var: v },
+    Sp<CopyableVal> => Exp::Value{ v: <> },
     <name_and_type_actuals: NameAndTypeActuals> "{" <fs:Comma<FieldExp>> "}" => {
         let (name, type_actuals) = name_and_type_actuals;
-        Exp::Pack(
-            StructName::new(name),
-            type_actuals,
-            fs.into_iter().collect::<BTreeMap<Field, Exp_>>()
-        )
+        Exp::Pack{
+            name: StructName::new(name),
+            types: type_actuals,
+            exp: fs.into_iter().collect::<BTreeMap<Field, Exp_>>()
+        }
     },
-    "(" <exps: Comma<Sp<Exp>>> ")" => Exp::ExprList(exps),
+    "(" <exps: Comma<Sp<Exp>>> ")" => Exp::ExprList{ exprs: exps },
 }
 
 StructName: StructName = {
@@ -209,11 +209,11 @@ Builtin: Builtin = {
     "create_account" => Builtin::CreateAccount,
     "exists<" <name_and_type_actuals: NameAndTypeActuals> ">" => {
         let (name, type_actuals) = name_and_type_actuals;
-        Builtin::Exists(StructName::new(name), type_actuals)
+        Builtin::Exists{ name: StructName::new(name), types: type_actuals }
     },
     "borrow_global<" <name_and_type_actuals: NameAndTypeActuals> ">" => {
         let (name, type_actuals) = name_and_type_actuals;
-        Builtin::BorrowGlobal(StructName::new(name), type_actuals)
+        Builtin::BorrowGlobal{ name: StructName::new(name), types: type_actuals }
     },
     "get_txn_gas_unit_price" => Builtin::GetTxnGasUnitPrice,
     "get_txn_max_gas_units" => Builtin::GetTxnMaxGasUnits,
@@ -222,11 +222,11 @@ Builtin: Builtin = {
     "get_txn_sequence_number" => Builtin::GetTxnSequenceNumber,
     "move_from<" <name_and_type_actuals: NameAndTypeActuals> ">" => {
         let (name, type_actuals) = name_and_type_actuals;
-        Builtin::MoveFrom(StructName::new(name), type_actuals)
+        Builtin::MoveFrom{ name: StructName::new(name), types: type_actuals }
     },
     "move_to_sender<" <name_and_type_actuals: NameAndTypeActuals> ">" => {
         let (name, type_actuals) = name_and_type_actuals;
-        Builtin::MoveToSender(StructName::new(name), type_actuals)
+        Builtin::MoveToSender{ name: StructName::new(name), types: type_actuals }
     },
     "get_gas_remaining" => Builtin::GetGasRemaining,
     "freeze" => Builtin::Freeze,
@@ -252,27 +252,27 @@ FieldBindings: (Field, Var_) = {
 }
 
 pub Cmd : Cmd = {
-    <lvalues: LValues> "=" <e: Sp<Exp>> => Cmd::Assign(lvalues, e),
+    <lvalues: LValues> "=" <e: Sp<Exp>> => Cmd::Assign{ var: lvalues, exp: e },
     <name_and_type_actuals: NameAndTypeActuals> "{" <bindings: Comma<FieldBindings>> "}" "=" <e: Sp<Exp>> => {
         let (name, type_actuals) = name_and_type_actuals;
-        Cmd::Unpack(
-            StructName::new(name),
-            type_actuals,
-            bindings.into_iter().collect(),
-            Box::new(e),
-        )
+        Cmd::Unpack{
+            name: StructName::new(name),
+            types: type_actuals,
+            fields: bindings.into_iter().collect(),
+            exp: Box::new(e),
+        }
     },
     "abort" <err: Sp<Exp>?> => {
         match err {
-            None => Cmd::Abort(None),
-            Some(err) => Cmd::Abort(Some(Box::new(err))),
+            None => Cmd::Abort{ exp: None },
+            Some(err) => Cmd::Abort{ exp: Some(Box::new(err)) },
         }
     },
-    "return" <v: Comma<Sp<Exp>>> => Cmd::Return(Box::new(Spanned::no_loc(Exp::ExprList(v)))),
+    "return" <v: Comma<Sp<Exp>>> => Cmd::Return{ exp: Box::new(Spanned::no_loc(Exp::ExprList{ exprs: v })) },
     "continue" => Cmd::Continue,
     "break" => Cmd::Break,
     <Sp<Call>> => Cmd::Exp(Box::new(<>)),
-    "(" <Comma<Sp<Exp>>> ")" => Cmd::Exp(Box::new(Spanned::no_loc(Exp::ExprList(<>)))),
+    "(" <Comma<Sp<Exp>>> ")" => Cmd::Exp(Box::new(Spanned::no_loc(Exp::ExprList{ exprs: <> }))),
 }
 
 Cmd_ : Cmd_ = {
@@ -285,14 +285,14 @@ Statement : Statement = {
         let cond = {
             let span = e.span;
             Spanned {
-                value: Exp::UnaryExp(UnaryOp::Not, Box::new(e)),
+                value: Exp::UnaryExp{ op: UnaryOp::Not, exp: Box::new(e) },
                 span
             }
         };
         let stmt = {
             let span = err.span;
             Statement::CommandStatement(Spanned {
-                value: Cmd::Abort(Some(Box::new(err))),
+                value: Cmd::Abort{ exp: Some(Box::new(err)) },
                 span,
             })
         };
@@ -354,8 +354,8 @@ Kind: Kind = {
 TypeFormal: (TypeVar, Kind) = {
     <n: Name> <k: (":" <Kind>)?> => {
         match k {
-            Some(k) => (TypeVar(n), k),
-            None => (TypeVar(n), Kind::All),
+            Some(k) => (TypeVar{ tvar: n }, k),
+            None => (TypeVar{ tvar: n }, Kind::All),
         }
     }
 }
@@ -384,10 +384,10 @@ Type: Type = {
     "u64" => Type::U64,
     "bool" => Type::Bool,
     "bytearray" => Type::ByteArray,
-    <s: QualifiedStructIdent> <tys: TypeActuals> => Type::Struct(s, tys),
-    "&" <t: Type> => Type::Reference(false, Box::new(t)),
-    "&mut " <t: Type> => Type::Reference(true, Box::new(t)),
-    <n: Name> => Type::TypeParameter(TypeVar(n)),
+    <s: QualifiedStructIdent> <tys: TypeActuals> => Type::Struct{ ident: s, typ: tys },
+    "&" <t: Type> => Type::Reference{ is_mut: false, typ: Box::new(t) },
+    "&mut " <t: Type> => Type::Reference{ is_mut: true, typ: Box::new(t) },
+    <n: Name> => Type::TypeParameter{ tvar: TypeVar{ tvar: n } },
 }
 
 ArgDecl : (Var, Type) = {
@@ -481,7 +481,7 @@ pub Program : Program = {
         let return_stmt = Statement::CommandStatement(
             Spanned {
                 span: Span::default(),
-                value: Cmd::Return(Box::new(Spanned::no_loc(Exp::ExprList(vec![])))),
+                value: Cmd::Return{ exp: Box::new(Spanned::no_loc(Exp::ExprList{ exprs: vec![] })) },
             }
         );
         let main =

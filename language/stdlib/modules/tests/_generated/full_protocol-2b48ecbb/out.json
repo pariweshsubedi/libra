@@ -1,0 +1,33 @@
+{
+  "total_txns": 5,
+  "init_balance": {
+    "94391c3baef21fd28eca2227e500f6c00e5033d1a4e7661c1d59a76a744c2faf": 7442,
+    "93cf03ac48d06ff1861a669c64849718781e985b8c12509a409ff00ee3006af4": 16108,
+    "168565ae45d4412e7a278f35cd9a1d12a434db332955d8ab35fa46bef4c7a079": 7442
+  },
+  "1": {
+    "sender_address": "168565ae45d4412e7a278f35cd9a1d12a434db332955d8ab35fa46bef4c7a079",
+    "input": "1-168565ae45d4412e7a278f35cd9a1d12a434db332955d8ab35fa46bef4c7a079-tx1.mvir",
+    "args": []
+  },
+  "2": {
+    "sender_address": "93cf03ac48d06ff1861a669c64849718781e985b8c12509a409ff00ee3006af4",
+    "input": "2-93cf03ac48d06ff1861a669c64849718781e985b8c12509a409ff00ee3006af4-tx2.mvir",
+    "args": []
+  },
+  "3": {
+    "sender_address": "168565ae45d4412e7a278f35cd9a1d12a434db332955d8ab35fa46bef4c7a079",
+    "input": "3-168565ae45d4412e7a278f35cd9a1d12a434db332955d8ab35fa46bef4c7a079-tx3.mvir",
+    "args": []
+  },
+  "4": {
+    "sender_address": "168565ae45d4412e7a278f35cd9a1d12a434db332955d8ab35fa46bef4c7a079",
+    "input": "4-168565ae45d4412e7a278f35cd9a1d12a434db332955d8ab35fa46bef4c7a079-tx4.mvir",
+    "args": []
+  },
+  "5": {
+    "sender_address": "94391c3baef21fd28eca2227e500f6c00e5033d1a4e7661c1d59a76a744c2faf",
+    "input": "5-94391c3baef21fd28eca2227e500f6c00e5033d1a4e7661c1d59a76a744c2faf-tx5.mvir",
+    "args": []
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "total_txns": 6,
+  "init_balance": {
+    "83041db5d11be867b4600dda9cdfa33f712c1d16eb0ec59cc6527545826926b6": 1147,
+    "3102f81d9334027da8bd34af4f49435cd62c830d6deb0949ddc5e82df84b83f4": 1142,
+    "1e194c5b2eb95d71e1a75f7c0e1f80c6250d32e5f7d4d5b1da6560db50605bfa": 17,
+    "e9c274590ae2dc50614b35c0120b346760dcf424449a23573260197314a6a06e": 8858,
+    "b5dda24ae4a5c03c937f8f0b2e86aa61b2b5f7dae78913cb4dfd8d3ba956fc2d": 3
+  },
+  "1": {
+    "sender_address": "b5dda24ae4a5c03c937f8f0b2e86aa61b2b5f7dae78913cb4dfd8d3ba956fc2d",
+    "input": "1-b5dda24ae4a5c03c937f8f0b2e86aa61b2b5f7dae78913cb4dfd8d3ba956fc2d-tx1.mvir",
+    "args": []
+  },
+  "2": {
+    "sender_address": "e9c274590ae2dc50614b35c0120b346760dcf424449a23573260197314a6a06e",
+    "input": "2-e9c274590ae2dc50614b35c0120b346760dcf424449a23573260197314a6a06e-tx2.mvir",
+    "args": []
+  },
+  "3": {
+    "sender_address": "b5dda24ae4a5c03c937f8f0b2e86aa61b2b5f7dae78913cb4dfd8d3ba956fc2d",
+    "input": "3-b5dda24ae4a5c03c937f8f0b2e86aa61b2b5f7dae78913cb4dfd8d3ba956fc2d-tx3.mvir",
+    "args": []
+  },
+  "4": {
+    "sender_address": "e9c274590ae2dc50614b35c0120b346760dcf424449a23573260197314a6a06e",
+    "input": "4-e9c274590ae2dc50614b35c0120b346760dcf424449a23573260197314a6a06e-tx4.mvir",
+    "args": []
+  },
+  "5": {
+    "sender_address": "1e194c5b2eb95d71e1a75f7c0e1f80c6250d32e5f7d4d5b1da6560db50605bfa",
+    "input": "5-1e194c5b2eb95d71e1a75f7c0e1f80c6250d32e5f7d4d5b1da6560db50605bfa-tx5.mvir",
+    "args": []
+  },
+  "6": {
+    "sender_address": "83041db5d11be867b4600dda9cdfa33f712c1d16eb0ec59cc6527545826926b6",
+    "input": "6-83041db5d11be867b4600dda9cdfa33f712c1d16eb0ec59cc6527545826926b6-tx6.mvir",
+    "args": []
+  }
+}

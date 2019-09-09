@@ -1,0 +1,19 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+import 0x0.MultiWallet2Of3;
+import 0x0.Sym;
+
+main() {
+    let src: address;
+    let dst: address;
+    let amount: u64;
+    let auth: bool;
+
+    src = Sym.fresh_address("attacker-src", 0x11111111111111111111111111111111);
+    dst = Sym.fresh_address("attacker-dst", 0x22222222222222222222222222222222);
+    amount = Sym.fresh_u64("attacker-amount", 1);
+    auth = MultiWallet2Of3.has_authorized(copy(src), copy(amount), copy(dst));
+
+    return;
+}

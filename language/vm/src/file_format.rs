@@ -38,6 +38,7 @@ use proptest::{collection::vec, prelude::*, strategy::BoxedStrategy};
 #[cfg(any(test, feature = "testing"))]
 use proptest_derive::Arbitrary;
 use types::{account_address::AccountAddress, byte_array::ByteArray, language_storage::ModuleId};
+use serde::{Serialize, Deserialize};
 
 /// Generic index into one of the tables in the binary format.
 pub type TableIndex = u16;
@@ -48,7 +49,7 @@ macro_rules! define_index {
         kind: $kind: ident,
         doc: $comment: literal,
     } => {
-        #[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
         #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
         #[cfg_attr(any(test, feature = "testing"), proptest(no_params))]
         #[doc=$comment]
@@ -201,7 +202,7 @@ pub const NO_TYPE_ACTUALS: LocalsSignatureIndex = LocalsSignatureIndex(0);
 /// Modules introduce a scope made of all types defined in the module and all functions.
 /// Type definitions (fields) are private to the module. Outside the module a
 /// Type is an opaque handle.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(no_params))]
 pub struct ModuleHandle {
@@ -224,7 +225,7 @@ pub struct ModuleHandle {
 ///
 /// At link time kind checking is performed and an error is reported if there is a
 /// mismatch with the definition.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(no_params))]
 pub struct StructHandle {
@@ -250,7 +251,7 @@ pub struct StructHandle {
 /// and the verifier enforces that property. The signature of the function is used at link time to
 /// ensure the function reference is valid and it is also used by the verifier to type check
 /// function calls.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(no_params))]
 pub struct FunctionHandle {
@@ -266,7 +267,7 @@ pub struct FunctionHandle {
 // Definitions are the module code. So the set of types and functions in the module.
 
 /// `StructFieldInformation` indicates whether a struct is native or has user-specified fields
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(no_params))]
 pub enum StructFieldInformation {
@@ -282,7 +283,7 @@ pub enum StructFieldInformation {
 
 /// A `StructDefinition` is a type definition. It either indicates it is native or
 // defines all the user-specified fields declared on the type.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(no_params))]
 pub struct StructDefinition {
@@ -306,7 +307,7 @@ impl StructDefinition {
 }
 /// A `FieldDefinition` is the definition of a field: the type the field is defined on,
 /// its name and the field type.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(no_params))]
 pub struct FieldDefinition {
@@ -320,7 +321,7 @@ pub struct FieldDefinition {
 
 /// A `FunctionDefinition` is the implementation of a function. It defines
 /// the *prototype* of the function and the function body.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(params = "usize"))]
 pub struct FunctionDefinition {
@@ -364,7 +365,7 @@ impl FunctionDefinition {
 
 /// A type definition. `SignatureToken` allows the definition of the set of known types and their
 /// composition.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(no_params))]
 pub struct TypeSignature(pub SignatureToken);
@@ -374,7 +375,7 @@ pub struct TypeSignature(pub SignatureToken);
 /// The `FunctionSignature` is polymorphic: it can have type parameters in the argument and return
 /// types and carries kind constraints for those type parameters (empty list for non-generic
 /// functions).
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(params = "usize"))]
 pub struct FunctionSignature {
@@ -398,7 +399,7 @@ pub struct FunctionSignature {
 ///
 /// Locals include the arguments to the function from position `0` to argument `count - 1`.
 /// The remaining elements are the type of each local.
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(params = "usize"))]
 pub struct LocalsSignature(
@@ -430,7 +431,7 @@ pub type TypeParameterIndex = u16;
 /// A `Kind` classifies types into sets with rules each set must follow.
 ///
 /// Currently there are three kinds in Move: `All`, `Resource` and `Unrestricted`.
-#[derive(Debug, Clone, Eq, Copy, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Eq, Copy, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 pub enum Kind {
     /// Represents the super set of all types. The type might actually be a `Resource` or
@@ -455,7 +456,7 @@ pub enum Kind {
 ///
 /// A SignatureToken can express more types than the VM can handle safely, and correctness is
 /// enforced by the verifier.
-#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum SignatureToken {
     /// Boolean, `true` or `false`.
     Bool,
@@ -641,7 +642,7 @@ impl SignatureToken {
 }
 
 /// A `CodeUnit` is the body of a function. It has the function header and the instruction stream.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(params = "usize"))]
 pub struct CodeUnit {
@@ -670,7 +671,7 @@ impl CodeUnit {
 ///
 /// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
 /// instruction stream.
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(no_params))]
 pub enum Bytecode {
@@ -1183,7 +1184,7 @@ impl Bytecode {
 
 /// A `CompiledProgram` defines the structure of a transaction to execute.
 /// It has two parts: modules to be published and a transaction script.
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CompiledProgram {
     /// The modules to be published
     pub modules: Vec<CompiledModule>,
@@ -1205,12 +1206,12 @@ impl CompiledProgram {
 /// A CompiledScript does not have definition tables because it can only have a `main(args)`.
 /// A CompiledScript defines the constant pools (string, address, signatures, etc.), the handle
 /// tables (external code references) and it has a `main` definition.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CompiledScript(CompiledScriptMut);
 
 /// A mutable version of `CompiledScript`. Converting to a `CompiledScript` requires this to pass
 /// the bounds checker.
-#[derive(Clone, Default, Eq, PartialEq, Debug)]
+#[derive(Clone, Default, Eq, PartialEq, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "testing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "testing"), proptest(params = "usize"))]
 pub struct CompiledScriptMut {
@@ -1342,12 +1343,12 @@ impl CompiledScriptMut {
 /// It is a unit of code that can be used by transactions or other modules.
 ///
 /// A module is published as a single entry and it is retrieved as a single blob.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CompiledModule(CompiledModuleMut);
 
 /// A mutable version of `CompiledModule`. Converting to a `CompiledModule` requires this to pass
 /// the bounds checker.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CompiledModuleMut {
     /// Handles to external modules and self at position 0.
     pub module_handles: Vec<ModuleHandle>,

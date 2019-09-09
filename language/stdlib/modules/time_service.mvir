@@ -1,0 +1,72 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+module TimeService {
+    resource T {
+        now: u64,
+    }
+
+    get_registrar_address(): address {
+        let REGISTRAR: address;
+        REGISTRAR = 0x11111111111111111111111111111111;
+        return move(REGISTRAR);
+    }
+
+    public init() {
+        let REGISTRAR: address;
+        let time: Self.T;
+        let only_registrar: address;
+        REGISTRAR = Self.get_registrar_address();
+
+        only_registrar = get_txn_sender();
+        assert(copy(only_registrar) == copy(REGISTRAR), 999);
+
+        time = T { now: 0, };
+        move_to_sender<T>(move(time));
+
+        return;
+    }
+
+    // Move does not have a notion of current time (now) -- AFAIK
+    // So we proxy current time by keeping a counter with the registrar
+    // data resource that increments every time this module is
+    // queried. Only the designated registrar can increment time.
+    public step_time(incr: u64) acquires T {
+        let reference: &mut Self.T;
+        let now: u64;
+        let REGISTRAR: address;
+        let sender: address;
+
+        REGISTRAR = Self.get_registrar_address();
+        sender = get_txn_sender();
+
+        assert(move(sender) == copy(REGISTRAR), 25);
+
+        // get the current timestamp from the storage and update it
+        reference = borrow_global<T>(copy(REGISTRAR));
+        *(&mut move(reference).now) = copy(incr) + *(&mut copy(reference).now);
+
+        return;
+    }
+
+    // This is a helper function that recovers the notion of time from this module
+    public current_time(): u64 acquires T {
+        let ref: &mut Self.T;
+        let REGISTRAR: address;
+        let now: u64;
+        let has_time: bool;
+
+        has_time = exists<T>(Self.get_registrar_address());
+        if (!copy(has_time)) {
+            return 0;
+        }
+
+        REGISTRAR = Self.get_registrar_address();
+
+        // get the current timestamp from the storage
+        ref = borrow_global<T>(copy(REGISTRAR));
+        now = *(&mut move(ref).now);
+
+        return move(now);
+    }
+}

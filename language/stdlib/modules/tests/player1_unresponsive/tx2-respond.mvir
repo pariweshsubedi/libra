@@ -1,0 +1,33 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+import 0x0.LibraCoin;
+import 0x0.LibraAccount;
+import 0x0.RockPaperScissors;
+import 0x0.Sym;
+import 0x0.Verify;
+import 0x0.Log;
+
+main() {
+    let a1: address;
+    let a2: address;
+    let hand2: u64;
+    let bet2_value: u64;
+    let bet2: LibraCoin.T;
+    let sender: address;
+
+    a1 = Sym.fresh_address("player1", 0x00000000000000000000000000000001);
+    a2 = Sym.fresh_address("player2", 0x00000000000000000000000000000002);
+    sender = get_txn_sender();
+    assert(copy(sender) == copy(a2), 99);
+
+    bet2_value = Sym.fresh_u64("player2_bet", 11);
+    hand2 = Sym.fresh_u64("player2_hand", 1);
+
+    bet2 = LibraAccount.withdraw_from_sender(copy(bet2_value));
+    RockPaperScissors.player2_bet(copy(a1), move(bet2), copy(hand2));
+
+    Log.log("tx2 complete");
+
+    return;
+}

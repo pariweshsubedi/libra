@@ -1,0 +1,23 @@
+import 0x0.LibraCoin;
+import 0x0.LibraAccount;
+import 0x0.MultiWallet2Of3;
+import 0x0.Sym;
+
+main() {
+    let o1: address;
+    let dst: address;
+    let sender: address;
+    let o1auth: u64;
+
+    o1 = Sym.fresh_address("owner1", 0xb5dda24ae4a5c03c937f8f0b2e86aa61b2b5f7dae78913cb4dfd8d3ba956fc2d);
+    dst = Sym.fresh_address("dst", 0x3102f81d9334027da8bd34af4f49435cd62c830d6deb0949ddc5e82df84b83f4);
+    sender = get_txn_sender();
+    assert(copy(sender) == copy(o1), 99);
+
+    o1auth = Sym.fresh_u64("o1auth", 540);
+
+    // have o1 authorize 11 for dst
+    MultiWallet2Of3.authorize(copy(o1auth), copy(dst));
+
+    return;
+}

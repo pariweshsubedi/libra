@@ -24,6 +24,12 @@ struct Args {
     /// Serialize and write the compiled output to this file
     #[structopt(short = "o", long = "output")]
     pub output_path: Option<String>,
+    /// Stop after printing ast
+    #[structopt(long = "only-ast")]
+    pub only_ast: bool,
+    /// Write JSON versions (or compiled program, or ast)
+    #[structopt(long = "json")]
+    pub output_json: bool,
     /// Treat input file as a module (default is to treat file as a program)
     #[structopt(short = "m", long = "module")]
     pub module_input: bool,
@@ -139,7 +145,7 @@ fn main() {
             extra_deps: deps,
             ..Compiler::default()
         };
-        let (compiled_program, dependencies) = compiler
+        let (compiled_program, dependencies, ast) = compiler
             .into_compiled_program_and_deps()
             .expect("Failed to compile program");
 
@@ -150,6 +156,9 @@ fn main() {
         } else {
             compiled_program
         };
+
+        let json_ast = serde_json::to_string_pretty(&ast).unwrap();
+        let json_prg = serde_json::to_string_pretty(&compiled_program).unwrap();
 
         match args.output_path {
             Some(path) => {
@@ -170,7 +179,21 @@ fn main() {
                 write_output(&path, &program_bytes);
             }
             None => {
-                println!("{}", compiled_program);
+                let out =
+                    if !args.output_json {
+                        if args.only_ast {
+                            format!("{:#?}", ast)
+                        } else {
+                            format!("{}", compiled_program)
+                        }
+                    } else {
+                        if args.only_ast {
+                            json_ast
+                        } else {
+                            json_prg
+                        }
+                    };
+                println!("{}", out);
             }
         }
     } else {

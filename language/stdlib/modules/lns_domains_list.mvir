@@ -1,0 +1,184 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+// This module maintains a list of a finite set of domains with a designated
+// registrar. It will reject name that have already been reserved.
+// TODO: allow people to release their domains and get back their money
+// TODO: expire domains (right now permanently hold spot); would need to modify
+//       get_available_index and ensure_name_available
+
+module LNSDomainRegistrar {
+    import 0x0.LibraCoin;
+    import 0x0.LibraAccount;
+
+    // If user-defined modules were supported, we could reference them as 0x01.LNSOprah
+    // But until then, we gotta put them in the stdlib and reference from there.
+    import 0x00.LNSOprah;
+
+    // Resource
+    resource T {
+        // Wrapped domain name
+        wrapped_domain: LNSOprah.T,
+        // index into the registrar metadata
+        index: u64,
+    }
+
+    // The registrar
+    resource Meta {
+        // Since Move does not have arrays or any dynamic allocation
+        // right now, we keep a finite list of domains and size populated
+        // This could be turned into `holders: address[]` later
+        // If address populated is that of registrar then the slot is available
+        holder1: address,
+        holder2: address,
+        holder3: address,
+        // the corresponding names
+        name1: bytearray,
+        name2: bytearray,
+        name3: bytearray,
+    }
+
+    init_registrar(empty: bytearray) {
+        let REGISTRAR: address;
+        let meta: Self.Meta;
+        let only_registrar: address;
+        REGISTRAR = Self.get_bank();
+
+        only_registrar = get_txn_sender();
+        assert(copy(only_registrar) == copy(REGISTRAR), 999);
+
+        meta = Meta {
+                        holder1: copy(REGISTRAR),
+                        holder2: copy(REGISTRAR),
+                        holder3: copy(REGISTRAR),
+                        name1: copy(empty),
+                        name2: copy(empty),
+                        name3: copy(empty)
+                    };
+        move_to_sender<Meta>(move(meta));
+
+        return;
+    }
+
+    set_at_index(idx: u64, holder: address, name: bytearray) acquires Meta {
+        let meta_ref: &mut Self.Meta;
+        let REGISTRAR: address;
+        REGISTRAR = Self.get_bank();
+
+        // make sure the index is within range
+        assert(copy(idx) > 0, 989);
+        assert(copy(idx) <= 3, 989);
+
+        meta_ref = borrow_global<Meta>(copy(REGISTRAR));
+        if (copy(idx) == 1) {
+            *(&mut copy(meta_ref).holder1) = copy(holder);
+            *(&mut copy(meta_ref).name1) = copy(name);
+        } else {
+            if (copy(idx) == 2) {
+                *(&mut copy(meta_ref).holder2) = copy(holder);
+                *(&mut copy(meta_ref).name2) = copy(name);
+            } else {
+                if (copy(idx) == 3) {
+                    *(&mut copy(meta_ref).holder3) = copy(holder);
+                    *(&mut copy(meta_ref).name3) = copy(name);
+                }
+            }
+        }
+
+        _ = move(meta_ref);
+        return;
+    }
+
+    get_bank(): address {
+        let BANK_ADDR: address;
+        BANK_ADDR = 0x11111111111111111111111111111111;
+        return move(BANK_ADDR);
+    }
+
+    // returns 0 if all domains occupied
+    // otherwise returns the index of the unoccupied domain
+    get_available_index(): u64 acquires Meta {
+        let meta_ref: &mut Self.Meta;
+        let REGISTRAR: address;
+        let idx: u64;
+        REGISTRAR = Self.get_bank();
+
+        meta_ref = borrow_global<Meta>(copy(REGISTRAR));
+        idx = 0;
+        if (*(&mut copy(meta_ref).holder1) == copy(REGISTRAR)) {
+            idx = 1;
+        } else {
+            if (*(&mut copy(meta_ref).holder2) == copy(REGISTRAR)) {
+                idx = 2;
+            } else {
+                if (*(&mut copy(meta_ref).holder3) == copy(REGISTRAR)) {
+                    idx = 3;
+                }
+            }
+        }
+        _ = move(meta_ref);
+        return move(idx);
+    }
+
+    ensure_name_available(req: bytearray) acquires Meta {
+        let meta_ref: &mut Self.Meta;
+        let REGISTRAR: address;
+        REGISTRAR = Self.get_bank();
+
+        meta_ref = borrow_global<Meta>(copy(REGISTRAR));
+        if (*(&mut copy(meta_ref).holder1) != copy(REGISTRAR)) {
+            assert(*(&mut copy(meta_ref).name1) != copy(req), 789);
+        } else {
+            if (*(&mut copy(meta_ref).holder2) != copy(REGISTRAR)) {
+                assert(*(&mut copy(meta_ref).name2) != copy(req), 789);
+            } else {
+                if (*(&mut copy(meta_ref).holder3) != copy(REGISTRAR)) {
+                    assert(*(&mut copy(meta_ref).name3) != copy(req), 789);
+                }
+            }
+        }
+        _ = move(meta_ref);
+        return;
+    }
+
+    public buy(name: bytearray, duration: u64, fee: LibraCoin.T) acquires Meta {
+        let new_domain: Self.T;
+        new_domain = Self.create(copy(name), copy(duration), move(fee));
+        move_to_sender<T>(move(new_domain));
+        return;
+    }
+
+    public create(name: bytearray, duration: u64, fee: LibraCoin.T): Self.T acquires Meta {
+        let start_time: u64;
+        let domain: Self.T;
+        let oprah_domain: LNSOprah.T;
+        let prev_deposit: LibraCoin.T;
+        let paid: LibraCoin.T;
+        let sender: address;
+        let index: u64;
+
+        // check that no holder already has name
+        Self.ensure_name_available(copy(name));
+
+        // will revert if no index available
+        index = Self.get_available_index();
+        assert(copy(index) > 0, 666); // if 0 index then means all domains occupied
+
+        // set this sender's address in the index
+        sender = get_txn_sender();
+
+        // slot this sender in the registrar's index
+        Self.set_at_index(copy(index), copy(sender), copy(name));
+
+        // check and get domain if the fees are appropriate
+        oprah_domain = LNSOprah.create(copy(name), copy(duration), move(fee));
+
+        // wrap the domain in our container to serve as output
+        domain = T {
+                     wrapped_domain: move(oprah_domain),
+                     index: copy(index)
+                   };
+
+        return move(domain);
+    }
+}

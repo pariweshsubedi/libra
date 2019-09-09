@@ -55,7 +55,7 @@ impl<'a> Compiler<'a> {
     /// Compiles into a `CompiledProgram` and also returns the dependencies.
     pub fn into_compiled_program_and_deps(
         mut self,
-    ) -> Result<(CompiledProgram, Vec<VerifiedModule>)> {
+    ) -> Result<(CompiledProgram, Vec<VerifiedModule>, ir_to_bytecode::parser::ast::Program)> {
         self.compile_impl()
     }
 
@@ -103,11 +103,11 @@ impl<'a> Compiler<'a> {
         Ok(Program::new(serialized_script, serialized_modules, args))
     }
 
-    fn compile_impl(&mut self) -> Result<(CompiledProgram, Vec<VerifiedModule>)> {
+    fn compile_impl(&mut self) -> Result<(CompiledProgram, Vec<VerifiedModule>, ir_to_bytecode::parser::ast::Program)> {
         let parsed_program = parse_program(self.code)?;
         let deps = self.deps();
         let compiled_program = compile_program(&self.address, &parsed_program, &deps)?;
-        Ok((compiled_program, deps))
+        Ok((compiled_program, deps, parsed_program))
     }
 
     fn compile_mod(&mut self) -> Result<(CompiledModule, Vec<VerifiedModule>)> {

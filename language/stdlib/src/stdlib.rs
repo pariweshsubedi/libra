@@ -31,6 +31,23 @@ lazy_static! {
     static ref BYTEARRAY_UTIL_MODULE: ModuleDefinition =
         make_module_definition!("../modules/bytearray_util.mvir");
     static ref EVENT_MODULE: ModuleDefinition = make_module_definition!("../modules/event.mvir");
+
+    static ref TIME_SERVICE: ModuleDefinition =
+        make_module_definition!("../modules/time_service.mvir");
+    static ref LNS_OPRAH_MODULE: ModuleDefinition =
+        make_module_definition!("../modules/lns_oprah.mvir");
+    static ref ROCK_PAPER_SCISSORS_MODULE: ModuleDefinition =
+        make_module_definition!("../modules/rock_paper_scissors.mvir");
+    static ref MULTISIG_MODULE: ModuleDefinition =
+        make_module_definition!("../modules/multisig.mvir");
+
+    static ref LOG_MODULE: ModuleDefinition =
+        make_module_definition!("../modules/log.mvir");
+    static ref SYM_MODULE: ModuleDefinition =
+        make_module_definition!("../modules/sym.mvir");
+    static ref VERIFY_MODULE: ModuleDefinition =
+        make_module_definition!("../modules/verify.mvir");
+
     static ref MODULE_DEFS: Vec<&'static ModuleDefinition> = {
         // Note: a module can depend on earlier modules in the list, but not vice versa. Don't try
         // to rearrange without considering this!
@@ -44,7 +61,19 @@ lazy_static! {
             &*U64_UTIL_MODULE,
             &*EVENT_MODULE, // depends on AddressUtil, BytearrayUtil, Hash, U64Util
             &*ACCOUNT_MODULE, // depends on Coin, Event, AddressUtil, BytearrayUtil, U64Util
-            &*VALIDATOR_SET_MODULE // will eventually depend on Account, others
+            &*VALIDATOR_SET_MODULE, // will eventually depend on Account, others
+            &*BYTEARRAY_UTIL_MODULE,
+
+            &*TIME_SERVICE,
+            &*LNS_OPRAH_MODULE, // depends on LibraCoin, LibraAccount, TimeService
+            &*ROCK_PAPER_SCISSORS_MODULE, // depends on LibraCoin, LibraAccount, Hash, TimeService, U64Util, BytearrayUtil
+            &*MULTISIG_MODULE, // depends on LibraCoin, LibraAccount
+
+            // Used for testing
+            &*LOG_MODULE, // depends on Event
+            &*SYM_MODULE,
+            &*VERIFY_MODULE, // depends on Log
+
         ]
     };
 }

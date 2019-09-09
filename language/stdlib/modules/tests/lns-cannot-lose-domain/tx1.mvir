@@ -1,0 +1,35 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+import 0x0.Sym;
+import 0x0.LNSOprah;
+import 0x0.TimeService;
+
+// CHECKS:
+// - Step 1: At start, calculate `preWinner`, i.e., who amongst user{1,2} owns name
+// - Step 2: Invoke the attacker
+// - Step 3: At end, calculate `postWinner`, i.e., who amongst user{1,2}, attacker owns name
+// - Step 4: Check `preWinner = o1 => postWinner = o2`
+
+main() {
+    let o1: address;
+    let o2: address;
+    let winner: address;
+    let valid: bool;
+    let name: bytearray;
+    let expiry: u64;
+    let sym_expiry: u64;
+
+    name = Sym.fresh_bytearray("name", "domain.lns");
+    o1 = Sym.fresh_address("o1", 0x1);
+    o2 = Sym.fresh_address("o2", 0x2);
+
+    winner, expiry, valid = LNSOprah.wins(copy(name), copy(o1), copy(o2));
+    sym_expiry = Sym.fresh_u64("expiry", 0);
+    assert(copy(sym_expiry) == copy(expiry), 99);
+
+    assert(move(valid), 99);
+    assert(copy(winner) == copy(o1), 99);
+
+    return;
+}

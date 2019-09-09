@@ -1,0 +1,390 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+// Game between 2 players, Alice and Bob
+// * Alice: Sends Challenge marked for Bob with { bet, hand }
+//   -- Offchain: Alice tells Bob there is a Challenge pending for them
+// * Bob: Responds to Challenge from Alice within time TURN_TIME
+// * Alice: Reveals her hand within time 2 x TURN_TIME of putting out Challenge
+// * Alice OR Bob: Either can ask for cash to be deposited to winner
+//
+// Unresponsive exception cases:
+// * Bob fails to respond to Challenge: Alice gets their money back
+// * Alice fails to reveal her hand: Bob wins by no-show
+//
+// Winner decision, over hands: Rock(0), Paper(1), Scissor (2)
+// * Scissor(2) wins over Paper(1)
+// * Paper(1) wins over Rock(0)
+// * Rock(0) wins over Scissor(2)
+//
+module RockPaperScissors {
+    import 0x0.LibraCoin;
+    import 0x0.LibraAccount;
+    import 0x0.Hash;
+    import 0x0.TimeService;
+    import 0x0.U64Util;
+    import 0x0.BytearrayUtil;
+
+    // Player 1 creates a Challenge and asks Player 2 for Response
+    resource Challenge {
+        // address of other player
+        player2: address,
+        // the value of bet
+        bet: LibraCoin.T,
+        // choice between Rock(0), Paper(1), Scissor(2)
+        hmac_hand: bytearray,
+        // timestamp of challenge
+        timestamp: u64
+    }
+
+    resource Response {
+        // address of other player
+        player1: address,
+        // responding to which challenge
+        challenge: Self.Challenge,
+        // the value of the bet
+        bet: LibraCoin.T,
+        // choice between Rock(0), Paper(1), Scissor(2)
+        hand: u64,
+    }
+
+    resource Outcome {
+        // Player 1 info: adddress, plaintext hand and bet
+        player1: address,
+        player1_hand: u64,
+        player1_bet: LibraCoin.T,
+
+        // Player 2 info: address, plaintext hand and bet
+        player2: address,
+        player2_hand: u64,
+        player2_bet: LibraCoin.T,
+    }
+
+    // resource Outcome {
+    //     // the plaintext outcome from Player 1
+    //     player1_hand: u64,
+    //     // the plaintext outcome from Player 2
+    //     player2_hand: u64,
+    //     // total value
+    //     combined_pool: LibraCoin.T,
+    //
+    //     // Missing player1 and player2:
+    //     // BUG1: Cashout can be called by any player2, since it is not checked.
+    //     // BUG2: If there is a tie, player2 is assumed to have won and gets all the winnings.
+    //     // NOTE: A player can be engaged in multiple games at the same time.
+    // }
+
+    // Computed a salted, hashed hand to use as a commitment for a challenge
+    public hash_hand(key: bytearray, hand: u64): bytearray {
+        let hashed: bytearray;
+        let concat: bytearray;
+        let hand_bytes: bytearray;
+
+        hand_bytes = U64Util.u64_to_bytes(move(hand));
+        concat = BytearrayUtil.bytearray_concat(copy(key), move(hand_bytes));
+        hashed = Hash.sha3_256(copy(concat));
+        return move(hashed);
+    }
+
+    public get_expiry_time(): u64 {
+        return 60 * 100;
+    }
+
+    // called by player 1
+    public player1_bet(p2: address, coin: LibraCoin.T, salted_hand: bytearray)
+    {
+        let time: u64;
+        let challenge: Self.Challenge;
+
+        time = TimeService.current_time();
+
+        challenge = Challenge {
+            player2: copy(p2),
+            bet: move(coin),
+            hmac_hand: copy(salted_hand),
+            timestamp: copy(time),
+        };
+
+        move_to_sender<Challenge>(move(challenge));
+        return;
+    }
+
+    // // called by player 2
+    public player2_bet(p1: address, bet: LibraCoin.T, hand: u64) acquires Challenge {
+        // TODO: Player2 should not be able to respond to a challenge
+        // if the timestamp has expired.
+
+        let response: Self.Response;
+        let challenge: Self.Challenge;
+        let challenge_ref: &mut Self.Challenge;
+        let challenged_addr: address;
+        let sender: address;
+
+        let p2_addr: address;
+        let p1_coin: LibraCoin.T;
+        let p1_hand_hmac: bytearray;
+        let challenge_time: u64;
+
+        challenge = move_from<Challenge>(copy(p1));
+
+        Challenge {
+            // address of other player
+            player2: p2_addr,
+            // the value of bet
+            bet: p1_coin,
+            // hmac hashed play of player 1
+            hmac_hand: p1_hand_hmac,
+            // timestamp of challenge
+            timestamp: challenge_time,
+        } = move(challenge);
+
+        sender = get_txn_sender();
+        assert(copy(sender) == copy(p2_addr), 99);
+
+        response = Response {
+            player1: copy(p1),
+            challenge: Challenge {
+                // address of other player
+                player2: move(p2_addr),
+                // the value of bet
+                bet: move(p1_coin),
+                // hmac hashed play of player 1
+                hmac_hand: move(p1_hand_hmac),
+                // timestamp of challenge
+                timestamp: move(challenge_time),
+            },
+            bet: move(bet),
+            hand: copy(hand),
+        };
+
+        move_to_sender<Response>(move(response));
+        return;
+    }
+
+    // called by player 1
+    public reveal(p2: address, key: bytearray, p1_hand: u64) acquires Response {
+        let response: Self.Response;
+        let challenge: Self.Challenge;
+        let outcome: Self.Outcome;
+        let sender: address;
+        let current_time: u64;
+        let p1_addr: address;
+        let p2_addr: address;
+        let p1_coin: LibraCoin.T;
+        let p2_coin: LibraCoin.T;
+        let pool: LibraCoin.T;
+        let p1_hand_hmac: bytearray;
+        let p1_hand_hash: bytearray;
+        let p1_hand_bytes: bytearray;
+        let p2_hand: u64;
+        let challenge_time: u64;
+
+        sender = get_txn_sender();
+        current_time = TimeService.current_time();
+
+        response = move_from<Response>(copy(p2));
+        // deconstruct the Response
+        Response {
+            // address of other player
+            player1: p1_addr,
+            // responding to which challenge
+            challenge: challenge,
+            // the value of the bet
+            bet: p2_coin,
+            // plaintext hand from player 2
+            hand: p2_hand,
+        } = move(response);
+
+        // deconstruct the Challenge
+        Challenge {
+            // address of other player
+            player2: p2_addr,
+            // the value of bet
+            bet: p1_coin,
+            // hmac hashed play of player 1
+            hmac_hand: p1_hand_hmac,
+            // timestamp of challenge
+            timestamp: challenge_time,
+        } = move(challenge);
+
+        // do a bunch of sanity checks
+        // ps: we can do all of them together here; the entire transaction
+        //     including the deconstucts are going to be reverted if any of
+        //     the asserts fail.
+        assert(copy(sender) == copy(p1_addr), 99);
+        assert(copy(p2) == copy(p2_addr), 99);
+
+        // check that the reveal matches the commitment in the Challenge
+        p1_hand_hash = Self.hash_hand(copy(key), copy(p1_hand));
+        assert(copy(p1_hand_hash) == copy(p1_hand_hmac), 99);
+
+        outcome = Outcome {
+            player1: copy(p1_addr),
+            player1_hand: copy(p1_hand),
+            player1_bet: move(p1_coin),
+
+            player2: copy(p2_addr),
+            player2_hand: copy(p2_hand),
+            player2_bet: move(p2_coin),
+        };
+
+        move_to_sender<Outcome>(move(outcome));
+        return;
+    }
+
+    wins(hand1: u64, hand2: u64): bool {
+        // choice between Rock(0), Paper(1), Scissor(2)
+        assert(((0 <= copy(hand1)) && (copy(hand1) <= 2)), 999);
+        assert(((0 <= copy(hand2)) && (copy(hand2) <= 2)), 999);
+
+        // rock beats scissor
+        if ((copy(hand1) == 0) && (copy(hand2) == 2)) {
+            return true;
+        }
+
+        // paper(1) beats rock(0), and scissor(2) beats paper(1)
+        return copy(hand1) == (copy(hand2) + 1);
+    }
+
+    // Called by Player 1
+    // Calling this implies that player 1 is asserting player 2 did not
+    // respond, and player 1 should get its bet back. They cannot abondon
+    // unless a certain amount of time has expired since the Challenge.
+    // This is because otherwise player 1 could watch the network and
+    // front-run the response (unsalted) from player 2.
+    public player1_abandon_challenge() acquires Challenge {
+        let now: u64;
+        let expiry: u64;
+        let player1: address;
+        let player2: address;
+        let challenge: Self.Challenge;
+        let bet: LibraCoin.T;
+        let hmac_hand: bytearray;
+        let timestamp: u64;
+        let CHALLENGE_EXPIRY: u64;
+
+        player1 = get_txn_sender();
+
+        challenge = move_from<Challenge>(copy(player1));
+        Challenge {
+            player2: player2,
+            bet: bet,
+            hmac_hand: hmac_hand,
+            timestamp: timestamp,
+        } = move(challenge);
+
+        CHALLENGE_EXPIRY = Self.get_expiry_time();
+
+        now = TimeService.current_time();
+        expiry = copy(timestamp) + copy(CHALLENGE_EXPIRY);
+        // time is right
+        assert(copy(now) > copy(expiry), 99);
+
+        LibraAccount.deposit(copy(player1), move(bet));
+
+        return;
+    }
+
+    // Called by Player 2
+    // If this is called by Player 2 then the claim is that Player 1 did
+    // not respond at all, and therefore Player 2 wins by default
+    public player2_other_player_nonresponsive() acquires Response {
+        let now: u64;
+        let expiry: u64;
+        let RESPONSE_EXPIRY: u64;
+        let sender: address;
+
+        let challenge: Self.Challenge;
+        let challenge_player: address;
+        let challenge_bet: LibraCoin.T;
+        let challenge_hand: bytearray;
+        let challenge_timestamp: u64;
+
+        let response: Self.Response;
+        let response_player: address;
+        let response_bet: LibraCoin.T;
+        let response_hand: u64;
+
+        now = TimeService.current_time();
+        sender = get_txn_sender();
+
+        response = move_from<Response>(copy(sender));
+        Response {
+            player1: response_player,
+            challenge: challenge,
+            bet: response_bet,
+            hand: response_hand,
+        } = move(response);
+
+        Challenge {
+            player2: challenge_player,
+            bet: challenge_bet,
+            hmac_hand: challenge_hand,
+            timestamp: challenge_timestamp,
+        } = move(challenge);
+
+        // verify<response_player == sender>;
+        // verify<!exists<Outcome>(challenge_player)>;
+
+        RESPONSE_EXPIRY = Self.get_expiry_time();
+
+        expiry = copy(challenge_timestamp) + 2 * copy(RESPONSE_EXPIRY);
+        // time is right
+        assert(copy(expiry) < copy(now), 99);
+
+        LibraAccount.deposit(copy(sender), move(response_bet));
+        LibraAccount.deposit(copy(sender), move(challenge_bet));
+
+        return;
+    }
+
+    // to be called by player 1 or player 2
+    public cash_out(p1: address, p2: address) acquires Outcome {
+        let player1: address;
+        let player1_hand: u64;
+        let player1_bet: LibraCoin.T;
+        let player2: address;
+        let player2_hand: u64;
+        let player2_bet: LibraCoin.T;
+
+        let winner_p1: bool;
+        let winner_p2: bool;
+
+        let outcome: Self.Outcome;
+
+        outcome = move_from<Outcome>(copy(p1));
+        Outcome {
+            player1: player1,
+            player1_hand: player1_hand,
+            player1_bet: player1_bet,
+
+            player2: player2,
+            player2_hand: player2_hand,
+            player2_bet: player2_bet,
+        } = move(outcome);
+
+        // assert(copy(p1) == copy(player1), 99);
+        // assert(copy(p2) == copy(player2), 99);
+
+        winner_p1 = Self.wins(copy(player1_hand), copy(player2_hand));
+        winner_p2 = Self.wins(copy(player2_hand), copy(player1_hand));
+
+        if (copy(winner_p1)) {
+            // player 1 won
+            LibraAccount.deposit(copy(p1), move(player1_bet));
+            LibraAccount.deposit(copy(p1), move(player2_bet));
+        } else {
+            if (copy(winner_p2)) {
+                // player 2 won
+                LibraAccount.deposit(copy(p2), move(player1_bet));
+                LibraAccount.deposit(copy(p2), move(player2_bet));
+            } else {
+                // neither player won, there's a tie
+                LibraAccount.deposit(copy(p1), move(player1_bet));
+                LibraAccount.deposit(copy(p2), move(player2_bet));
+            }
+        }
+
+        return;
+    }
+}

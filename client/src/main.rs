@@ -5,6 +5,8 @@ use client::{client_proxy::ClientProxy, commands::*};
 use logger::set_default_global_logger;
 use rustyline::{config::CompletionType, error::ReadlineError, Config, Editor};
 use structopt::StructOpt;
+use std::io::{Write, Read};
+use std::net::{TcpListener, TcpStream};
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -49,12 +51,44 @@ struct Args {
     pub sync: bool,
 }
 
+
+fn read_from_stream(stream: &mut TcpStream) -> String {
+    // read 20 bytes at a time from stream echoing back to stream
+    loop {
+        let mut read = [0; 2048];
+        match (*stream).read(&mut read) {
+            Ok(n) => {
+                if n == 0 { 
+                    // connection was closed
+                    return String::from("");
+                }
+                let response = String::from_utf8(read[0..n].to_vec()).unwrap();
+                return response;
+            }
+            Err(err) => {
+                panic!(err);
+            }
+        }
+    }
+}
+
+fn write_to_stream(stream: &mut TcpStream) {
+    let response = String::from("Command executed.");
+    let response_buf = response.into_bytes();
+    (*stream).write(&response_buf[0..response_buf.len()]).unwrap();
+}
+
 fn main() -> std::io::Result<()> {
     let _logger = set_default_global_logger(false /* async */, None);
     crash_handler::setup_panic_handler();
     let args = Args::from_args();
 
     let (commands, alias_to_cmd) = get_commands(args.faucet_account_file.is_some());
+
+    let is_cli = match std::env::var("CLI") {
+        Ok(_) => true,
+        Err(_) => false
+    };
 
     let faucet_account_file = args.faucet_account_file.unwrap_or_else(|| "".to_string());
 
@@ -67,7 +101,7 @@ fn main() -> std::io::Result<()> {
         args.faucet_server,
         args.mnemonic_file,
     )
-    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, &format!("{}", e)[..]))?;
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, &format!("{}", e)[..]))?;
 
     // Test connection to validator
     let test_ret = client_proxy.test_validator_connection();
@@ -79,6 +113,7 @@ fn main() -> std::io::Result<()> {
         );
         return Ok(());
     }
+    
     let cli_info = format!("Connected to validator at: {}:{}", args.host, args.port);
     print_help(&cli_info, &commands);
     println!("Please, input commands: \n");
@@ -89,40 +124,76 @@ fn main() -> std::io::Result<()> {
         .auto_add_history(true)
         .build();
     let mut rl = Editor::<()>::with_config(config);
-    loop {
-        let readline = rl.readline("libra% ");
-        match readline {
-            Ok(line) => {
-                let params = parse_cmd(&line);
-                if params.is_empty() {
-                    continue;
+    let listener = TcpListener::bind("127.0.0.1:9875").unwrap();
+    if is_cli {
+        loop {
+            let readline = rl.readline("libra% ");
+            match readline {
+                Ok(line) => {
+                    let params = parse_cmd(&line);
+                    match alias_to_cmd.get(params[0]) {
+                        Some(cmd) => cmd.execute(&mut client_proxy, &params),
+                        None => match params[0] {
+                            "quit" | "q!" => break,
+                            "help" | "h" => print_help(&cli_info, &commands),
+                            "" => continue,
+                            x => println!("Unknown command: {:?}", x),
+                        },
+                    }
                 }
-                match alias_to_cmd.get(&params[0]) {
-                    Some(cmd) => cmd.execute(&mut client_proxy, &params),
-                    None => match params[0] {
-                        "quit" | "q!" => break,
-                        "help" | "h" => print_help(&cli_info, &commands),
-                        "" => continue,
-                        x => println!("Unknown command: {:?}", x),
-                    },
+                Err(ReadlineError::Interrupted) => {
+                    println!("CTRL-C");
+                    break;
                 }
-            }
-            Err(ReadlineError::Interrupted) => {
-                println!("CTRL-C");
-                break;
-            }
-            Err(ReadlineError::Eof) => {
-                println!("CTRL-D");
-                break;
-            }
-            Err(err) => {
-                println!("Error: {:?}", err);
-                break;
+                Err(ReadlineError::Eof) => {
+                    println!("CTRL-D");
+                    break;
+                }
+                Err(err) => {
+                    println!("Error: {:?}", err);
+                    break;
+                }
             }
         }
-    }
 
-    Ok(())
+        Ok(())
+    } else {   
+        for stream in listener.incoming() {
+            match stream {
+                Ok(mut stream) => {
+                    loop {
+                        println!("Listening.");
+                        let string = read_from_stream(&mut stream);
+                        println!("{}", string);
+                        let params = parse_cmd(&string);
+                        if params.is_empty() {
+                            continue;
+                        }
+                        
+                        match alias_to_cmd.get(&params[0]) {
+                            Some(cmd) => cmd.execute(&mut client_proxy, &params),   
+                            None => match params[0] {
+                                "quit" | "q!" => {
+                                    write_to_stream(&mut stream);
+                                    println!("Quit!");
+                                    ::std::process::exit(0) },
+                                "help" | "h" => print_help(&cli_info, &commands),
+                                "" => continue,
+                                x => println!("Unknown command: {:?}", x),
+                            },
+                        }
+
+                        write_to_stream(&mut stream);
+                    }
+                }
+                Err(_) => {
+                    println!("Error!");
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Print the help message for the client and underlying command.

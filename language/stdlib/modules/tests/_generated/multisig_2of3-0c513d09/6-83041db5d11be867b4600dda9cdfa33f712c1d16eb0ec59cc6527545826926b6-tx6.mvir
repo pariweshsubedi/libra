@@ -1,0 +1,74 @@
+import 0x0.LibraCoin;
+import 0x0.LibraAccount;
+import 0x0.MultiWallet2Of3;
+import 0x0.Sym;
+import 0x0.Verify;
+
+main() {
+    let o1: address;
+    let o2: address;
+    let o3: address;
+    let dst: address;
+    let sender: address;
+    let min_auth: u64;
+    let auth1: u64;
+    let auth2: u64;
+    let pre_balance1: u64;
+    let pre_balance2: u64;
+    let pre_balance3: u64;
+    let pre_balance_dst: u64;
+    let post_balance1: u64;
+    let post_balance2: u64;
+    let post_balance3: u64;
+    let post_balance_dst: u64;
+    let expected_post_balance1: u64;
+    let expected_post_balance2: u64;
+    let expected_post_balance3: u64;
+    let expected_post_balance_dst: u64;
+    let balance_condition1: bool;
+    let balance_condition2: bool;
+    let balance_condition3: bool;
+    let balance_condition_dst: bool;
+
+    o1 = Sym.fresh_address("owner1", 0xb5dda24ae4a5c03c937f8f0b2e86aa61b2b5f7dae78913cb4dfd8d3ba956fc2d);
+    o2 = Sym.fresh_address("owner2", 0xe9c274590ae2dc50614b35c0120b346760dcf424449a23573260197314a6a06e);
+    o3 = Sym.fresh_address("owner3", 0x1e194c5b2eb95d71e1a75f7c0e1f80c6250d32e5f7d4d5b1da6560db50605bfa);
+    dst = Sym.fresh_address("dst", 0x3102f81d9334027da8bd34af4f49435cd62c830d6deb0949ddc5e82df84b83f4);
+    sender = get_txn_sender();
+
+    pre_balance1 = Sym.fresh_u64("o1_init_balance", 1);
+    pre_balance2 = Sym.fresh_u64("o2_init_balance", 8855);
+    pre_balance3 = Sym.fresh_u64("o3_init_balance", 17);
+    pre_balance_dst = Sym.fresh_u64("dst_init_balance", 1142);
+
+    auth1 = Sym.fresh_u64("o1auth", 540);
+    auth2 = Sym.fresh_u64("o2auth", 541);
+    min_auth = 0;
+    if (copy(auth1) < copy(auth2)) {
+        min_auth = copy(auth1);
+    } else {
+        min_auth = copy(auth2);
+    }
+
+    expected_post_balance1 = copy(pre_balance1);
+    expected_post_balance2 = copy(pre_balance2);
+    expected_post_balance3 = copy(pre_balance3);
+    expected_post_balance_dst = copy(pre_balance_dst) + copy(min_auth);
+
+    post_balance1 = LibraAccount.balance(copy(o1));
+    post_balance2 = LibraAccount.balance(copy(o2));
+    post_balance3 = LibraAccount.balance(copy(o3));
+    post_balance_dst = LibraAccount.balance(copy(dst));
+
+    balance_condition1 = copy(post_balance1) == copy(expected_post_balance1);
+    balance_condition2 = copy(post_balance2) == copy(expected_post_balance2);
+    balance_condition3 = copy(post_balance3) == copy(expected_post_balance3);
+    balance_condition_dst = copy(post_balance_dst) <= copy(expected_post_balance_dst);
+
+    Verify.check(copy(balance_condition1), "Verification of balance 1");
+    Verify.check(copy(balance_condition2), "Verification of balance 2");
+    Verify.check(copy(balance_condition3), "Verification of balance 3");
+    Verify.check(copy(balance_condition_dst), "Verification of balance dst");
+
+    return;
+}

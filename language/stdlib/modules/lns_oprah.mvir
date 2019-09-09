@@ -1,0 +1,323 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+// This module allows unrestricted domains.
+// Libra Name Server, Oprah Style:
+// "you get a domain, you get a domain, everybody gets a domain"
+//
+// Everybody who requests, get the domain; the only thing this module does
+// is timestamp it; the "resolver" has to be off-chain and will only
+// resolve the domain with the earlier inception time that is still unexpired
+//
+// Given the resolver above, it makes sense that nobody would be "really"
+// incentivized to buy domains that are already owned by others; unless
+// they just want to lock up their money.
+// The caveat about "really" :) is that this system incentivizes a "waiting
+// queue" of people ready to take over a domain. E.g., if I own "people.earth"
+// from 2020-2050, it does not stop anybody holding it from 2021-2060. If
+// I keep renewing its mine; but the moment I let go of it, the holder
+// with the next in-line inception time will get the domain.
+
+module LNSOprah {
+    import 0x0.LibraCoin;
+    import 0x0.LibraAccount;
+    import 0x0.TimeService;
+
+    // Domain name resource
+    resource T {
+        // Domain name
+        name: bytearray,
+        // Inception time
+        inception: u64,
+        // Expiry time
+        expires: u64,
+        // Security deposit
+        deposit: LibraCoin.T
+    }
+
+    // BUY:
+    //   Creates a domain and sets it as the sender's resource
+    //   Note: Since an address can only have one resource of a type
+    //         it means that each address can only hold one domain
+    public buy(name: bytearray, duration: u64, fee: LibraCoin.T) {
+        let new_domain: Self.T;
+        new_domain = Self.create(copy(name), copy(duration), move(fee));
+        move_to_sender<T>(move(new_domain));
+        return;
+    }
+
+    // CREATE:
+    //   This function allows one to create a domain for a particular
+    //   duration, as long as you pay the requisite fee. The fee
+    //   charged is determined by `COST_PER_TIME * duration` requested
+    //   Note: Public function in case other modules want to create a domain
+    //         to wrap it up
+    public create(name: bytearray, duration: u64, fee: LibraCoin.T): Self.T {
+        let new_domain: Self.T;
+        let fee_ref: &LibraCoin.T;
+        let paid: u64;
+        let expiry: u64;
+        let now: u64;
+
+        // get how much was paid
+        fee_ref = &fee;
+        paid = LibraCoin.value(move(fee_ref));
+
+        // get the new expiry time
+        expiry, now = Self.expiry_time(0, move(paid), move(duration));
+
+        // all checks good and now we can let the sender have the domain
+        new_domain = T { name: copy(name),
+                         inception: copy(now),
+                         expires: copy(expiry),
+                         deposit: move(fee)
+                       };
+
+        return move(new_domain);
+    }
+
+    // This is helper function (public because it is used by lns_stake_final)
+    // 1 - It will revert if fees paid is insufficient for duration requested
+    // 2 - If correct fees paid then we will compute new expiry time
+    //     a) if current_end =0 or <now then new expiry = now + duration
+    //     b) if current_end >now then new expiry = current_end + duration
+    public expiry_time(current_end: u64, paid: u64, duration: u64): u64 * u64 {
+        let due: u64;
+        let now: u64;
+        let ends: u64;
+        let start: u64;
+        let COST_PER_TIME: u64;
+
+        COST_PER_TIME = 1;
+
+        due = copy(duration) * copy(COST_PER_TIME);
+
+        // ensure that the fee paid are greater than due
+        assert(copy(paid) > copy(due), 420);
+
+        now = TimeService.current_time();
+
+        // start = current_end = 0 or current_end < now ? now : current_end
+        if ((copy(current_end) == 0) || (copy(current_end) < copy(now))) {
+            start = copy(now);
+        } else {
+            start = copy(current_end);
+        }
+
+        // compute the expiry time
+        ends = copy(start) + copy(duration);
+
+        return move(ends), move(now);
+    }
+
+    // RENEW:
+    //   This will renew a domain provided as input for the duration requested
+    //   The semantics are pretty identical to BUY expect that the new
+    //   expiry time is updated to be past the previous expiry with duration
+    //   and the new coin packed in the resource is the combination of old
+    //   and the extra supplied as arg.
+    public renew(domain: Self.T, duration: u64, fee: LibraCoin.T) {
+        let renewed: Self.T;
+        let fee_ref: &LibraCoin.T;
+        let paid: u64;
+        let expiry: u64;
+        let now: u64;
+        let name: bytearray;
+        let inception: u64;
+        let expires: u64;
+        let deposit: LibraCoin.T;
+        let amt: LibraCoin.T;
+
+        // get how much was paid
+        fee_ref = &fee;
+        paid = LibraCoin.value(move(fee_ref));
+
+        // deconstruct the domain
+        T { name, inception, expires, deposit } = move(domain);
+
+        // get the new expiry time
+        expiry, now = Self.expiry_time(copy(expires), move(paid), move(duration));
+
+        // get the total amount now held after renewal: fee + deposit
+        amt = LibraCoin.join(move(fee), move(deposit));
+
+        // all checks good and now we can let the sender have the domain
+        renewed = T { name: copy(name),
+                      inception: copy(inception),
+                      expires: copy(expiry),
+                      deposit: move(amt)
+                    };
+        move_to_sender<T>(move(renewed));
+
+        return;
+    }
+
+    get_bank(): address {
+        let BANK_ADDR: address;
+        BANK_ADDR = 0x11111111111111111111111111111111;
+        return move(BANK_ADDR);
+    }
+
+    // RELEASE domain:
+    //   This function is slightly tricky. We want to incentive people
+    //   to give up domains when they are done with it. The incentive is
+    //   they get back the security deposit that is locked up inside
+    //   the domain resource.
+    //
+    //   Option 1 - is that we return the full security deposit. But that
+    //   option precludes the system from charging any `rent` for the duration
+    //   the domain was held.
+    //
+    //   Option 2 - is to send the security deposit to the registrar and
+    //   delegate to the registrar the future decision of how much to
+    //   return back to the holder of the domain. That gives undue power to
+    //   the registrar, so non-ideal.
+    //
+    //   Midway option 1.5 - Send 1/2 each to renter and registrar. This does
+    //   incentivize people to return domains; but at the same times leaves
+    //   the option open for the registrar to charge rent at the rate of
+    //   `fraction * COST_PER_TIME / 2` where fraction \in [0,1] and
+    //   decide on the exact `fraction` in the future.
+    //
+    // This function return 1/2 of the security deposit to the renter of domain, and the other 1/2
+    // to the registrar.
+    public abandon() acquires T {
+        let domain: Self.T;
+        let sender: address;
+        let BANK_ADDR: address;
+        let name: bytearray;
+        let inception: u64;
+        let expires: u64;
+        let deposit: LibraCoin.T;
+        let deposit_ref: &LibraCoin.T;
+        let rent: LibraCoin.T;
+        let half: u64;
+        let total: u64;
+
+        sender = get_txn_sender();
+        domain = move_from<T>(copy(sender));
+
+        BANK_ADDR = Self.get_bank();
+
+        // deconstruct the domain
+        T { name, inception, expires, deposit } = move(domain);
+
+        // find out what half of the deposit is
+        deposit_ref = &deposit;
+        total = LibraCoin.value(move(deposit_ref));
+        half = copy(total) / 2;
+
+        // split the coin to get one each for the sender and registrar
+        deposit, rent = LibraCoin.split(move(deposit), copy(half));
+
+        // hold the rent with the registrar
+        LibraAccount.deposit(copy(BANK_ADDR), move(rent));
+
+        // return half to the renter
+        LibraAccount.deposit(copy(sender), move(deposit));
+
+        return;
+    }
+
+    has_valid_domain(name: bytearray, owner: address): bool * u64 acquires T {
+        let now: u64;
+        let exists: bool;
+        let ref: &mut Self.T;
+        let inception: u64;
+        let expiry: u64;
+        let dom_name: bytearray;
+
+        now = TimeService.current_time();
+
+        exists = exists<T>(copy(owner));
+        if (!copy(exists)) {
+            return false, 0;
+        }
+
+        ref = borrow_global<T>(copy(owner));
+        expiry = *(&mut copy(ref).expires);
+        inception = *(&mut copy(ref).inception);
+        dom_name = *(&mut move(ref).name);
+
+        if (copy(dom_name) != copy(name)) {
+            return false, 0;
+        }
+
+        if (copy(inception) > copy(now)) {
+            return false, 0;
+        }
+
+        if (copy(expiry) < copy(now)) {
+            return false, 0;
+        }
+
+        // owner address 1) has a domain, that 2) matches `name`, and 3) is not expired.
+        return true, move(expiry);
+
+    }
+
+    // Given two addresses, that may or may not own domain `name`. Return the address of the proper
+    // owner and its expiration time (or return false if neither owns the domain).
+    public wins(name: bytearray, owner1: address, owner2: address): address * u64 * bool acquires T {
+        let now: u64;
+        let d1ref: &mut Self.T;
+        let d2ref: &mut Self.T;
+        let d1inception: u64;
+        let d1expiry: u64;
+        let d1name: bytearray;
+        let d2inception: u64;
+        let d2expiry: u64;
+        let d2name: bytearray;
+        let viable1: bool;
+        let viable2: bool;
+        let own1first: bool;
+        let ZERO: address;
+        let valid1: bool;
+        let valid2: bool;
+        let exp1: u64;
+        let exp2: u64;
+
+        ZERO = 0x00000000000000000000000000000000;
+
+        valid1, exp1 = Self.has_valid_domain(copy(name), copy(owner1));
+        valid2, exp2 = Self.has_valid_domain(copy(name), copy(owner2));
+
+        // neither address has a valid domain.
+        // nobody wins
+        if (!copy(valid1) && !copy(valid2)) {
+            return copy(ZERO), 0, false;
+        }
+        // at least one of them is valid (viable)
+        if (!copy(valid1)) {
+            return copy(owner2), move(exp2), true;
+        }
+        if (!copy(valid2)) {
+            return copy(owner1), move(exp1), true;
+        }
+
+        d1ref = borrow_global<T>(copy(owner1));
+        d1inception = *(&mut copy(d1ref).inception);
+        d1expiry = *(&mut copy(d1ref).expires);
+        d1name = *(&mut move(d1ref).name);
+
+        d2ref = borrow_global<T>(copy(owner2));
+        d2inception = *(&mut copy(d2ref).inception);
+        d2expiry = *(&mut copy(d2ref).expires);
+        d2name = *(&mut move(d2ref).name);
+
+        now = TimeService.current_time();
+
+        assert(copy(now) < copy(d1expiry), 1337);
+
+        own1first = copy(d1inception) <= copy(d2inception);
+
+        // both valid given current time, pick the one with earlier inception
+        if (copy(own1first)) {
+            return copy(owner1), move(exp1), true;
+        } else {
+            return copy(owner2), move(exp2), true;
+        }
+
+        return copy(ZERO), 0, false;
+    }
+}

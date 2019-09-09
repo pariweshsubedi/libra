@@ -1,0 +1,36 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+import 0x0.LibraAccount;
+import 0x0.RockPaperScissors;
+import 0x0.Sym;
+import 0x0.Verify;
+import 0x0.TimeService;
+
+main() {
+    let a1: address;
+    let a2: address;
+    let sender: address;
+    let time: u64;
+    let EXPIRY: u64;
+    let challenge_time: u64;
+    let post_balance: u64;
+    let pre_balance: u64;
+    let balance_condition: bool;
+
+    time = TimeService.current_time();
+    challenge_time = Sym.fresh_u64("challenge_time", 0);
+    EXPIRY = RockPaperScissors.get_expiry_time();
+
+    a1 = Sym.fresh_address("player1", 0x00000000000000000000000000000001);
+    a2 = Sym.fresh_address("player2", 0x00000000000000000000000000000002);
+
+    post_balance = LibraAccount.balance(copy(a1));
+    pre_balance = Sym.fresh_u64("player1_init_balance", 5);
+    balance_condition = copy(post_balance) == copy(pre_balance);
+
+    Verify.check(copy(time) > copy(challenge_time) + copy(EXPIRY), "time elapsed");
+    Verify.check(copy(balance_condition), "player balance maintain");
+
+    return;
+}

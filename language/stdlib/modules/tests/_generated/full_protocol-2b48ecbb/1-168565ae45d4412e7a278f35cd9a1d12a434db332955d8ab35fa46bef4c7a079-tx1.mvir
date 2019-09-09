@@ -1,0 +1,51 @@
+import 0x0.LibraCoin;
+import 0x0.LibraAccount;
+import 0x0.RockPaperScissors;
+import 0x0.Sym;
+import 0x0.Verify;
+import 0x0.Log;
+
+main() {
+    let a1: address;
+    let a2: address;
+    let bet1: LibraCoin.T;
+    let bet1_value: u64;
+    let balance1: u64;
+    let balance1_sym: u64;
+    let balance2: u64;
+    let balance2_sym: u64;
+    let hand1: u64;
+    let hand1_bytes: bytearray;
+    let secret: bytearray;
+    let sender: address;
+
+    a1 = Sym.fresh_address("player1", 0x168565ae45d4412e7a278f35cd9a1d12a434db332955d8ab35fa46bef4c7a079);
+    a2 = Sym.fresh_address("player2", 0x93cf03ac48d06ff1861a669c64849718781e985b8c12509a409ff00ee3006af4);
+    sender = get_txn_sender();
+    assert(copy(sender) == copy(a1), 99);
+    // assert(copy(a1) != copy(a2), 99);
+
+    balance1 = LibraAccount.balance(copy(a1));
+    balance1_sym = Sym.fresh_u64("player1_init_balance", 7442);
+    assert(copy(balance1_sym) == copy(balance1), 99);
+
+    balance2 = LibraAccount.balance(copy(a2));
+    balance2_sym = Sym.fresh_u64("player2_init_balance", 16108);
+    assert(copy(balance2_sym) == copy(balance2), 99);
+
+    /////////////
+
+    bet1_value = Sym.fresh_u64("player1_bet", 6907);
+    hand1 = Sym.fresh_u64("player1_hand", 0);
+    // assert(copy(hand1) <= 2, 99);
+    secret = Sym.fresh_bytearray("player1_secret", "");
+
+    bet1 = LibraAccount.withdraw_from_sender(copy(bet1_value));
+
+    hand1_bytes = RockPaperScissors.hash_hand(copy(secret), copy(hand1));
+    RockPaperScissors.player1_bet(copy(a2), move(bet1), copy(hand1_bytes));
+
+    Log.log("tx1 complete");
+
+    return;
+}

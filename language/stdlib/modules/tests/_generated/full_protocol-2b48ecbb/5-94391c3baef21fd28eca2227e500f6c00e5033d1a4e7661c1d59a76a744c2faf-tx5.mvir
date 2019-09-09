@@ -1,0 +1,77 @@
+import 0x0.LibraAccount;
+import 0x0.RockPaperScissors;
+import 0x0.Sym;
+import 0x0.Verify;
+import 0x0.Log;
+
+main() {
+    let a1: address;
+    let a2: address;
+    let hand1: u64;
+    let hand2: u64;
+    let bet1_value: u64;
+    let bet2_value: u64;
+    let pre_balance1: u64;
+    let pre_balance2: u64;
+    let player1_winnings: u64;
+    let player2_winnings: u64;
+    let expected_post_balance1: u64;
+    let expected_post_balance2: u64;
+    let post_balance1: u64;
+    let post_balance2: u64;
+    let balance_condition0: bool;
+    let balance_condition1: bool;
+    let balance_condition2: bool;
+
+    a1 = Sym.fresh_address("player1", 0x168565ae45d4412e7a278f35cd9a1d12a434db332955d8ab35fa46bef4c7a079);
+    a2 = Sym.fresh_address("player2", 0x93cf03ac48d06ff1861a669c64849718781e985b8c12509a409ff00ee3006af4);
+
+    bet1_value = Sym.fresh_u64("player1_bet", 6907);
+    bet2_value = Sym.fresh_u64("player2_bet", 8222);
+
+    pre_balance1 = Sym.fresh_u64("player1_init_balance", 7442);
+    pre_balance2 = Sym.fresh_u64("player2_init_balance", 16108);
+
+    hand1 = Sym.fresh_u64("player1_hand", 0);
+    hand2 = Sym.fresh_u64("player2_hand", 2);
+
+    // Rock(0) beat Scissors(2)
+    // Paper(1) beat Rock(0)
+    // Scissors(2) beat Paper(1)
+
+    if (copy(hand1) == copy(hand2)) {
+        player1_winnings = copy(bet1_value);
+        player2_winnings = copy(bet2_value);
+    } else {
+        if (copy(hand1) == ((copy(hand2) + 1) % 3)) {
+            player1_winnings = copy(bet1_value) + copy(bet2_value);
+            player2_winnings = 0;
+        } else {
+            player1_winnings = 0;
+            player2_winnings = copy(bet1_value) + copy(bet2_value);
+        }
+    }
+
+    expected_post_balance1 = copy(pre_balance1) + copy(player1_winnings) - copy(bet1_value);
+    expected_post_balance2 = copy(pre_balance2) + copy(player2_winnings) - copy(bet2_value);
+
+    post_balance1 = LibraAccount.balance(copy(a1));
+    post_balance2 = LibraAccount.balance(copy(a2));
+
+    balance_condition0 = copy(post_balance1) >= copy(pre_balance1);
+    balance_condition1 = copy(post_balance1) >= copy(expected_post_balance1);
+    balance_condition2 = copy(post_balance2) >= copy(expected_post_balance2);
+
+    if (copy(a1) == copy(a2)) {
+        // player 1 and player 2 are the same.
+        // player 1 should have gotten all their money back.
+        Verify.check(copy(balance_condition0), "Verification of balance 0");
+    } else {
+        Verify.check(copy(balance_condition1), "Verification of balance 1");
+        Verify.check(copy(balance_condition2), "Verification of balance 2");
+    }
+
+    Log.log("tx5 complete");
+
+    return;
+}

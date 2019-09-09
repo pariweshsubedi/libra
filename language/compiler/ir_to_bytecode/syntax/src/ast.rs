@@ -8,9 +8,10 @@ use std::{
     ops::Deref,
 };
 use types::{account_address::AccountAddress, byte_array::ByteArray, language_storage::ModuleId};
+use serde::{Serialize, Deserialize};
 
 /// Generic wrapper that keeps file locations for any ast-node
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct Spanned<T> {
     /// The file location
     pub span: Loc,
@@ -24,7 +25,8 @@ pub type Loc = Span<ByteIndex>;
 //**************************************************************************************************
 // Program
 //**************************************************************************************************
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 /// A set of move modules and a Move transaction script
 
 pub struct Program {
@@ -38,7 +40,8 @@ pub struct Program {
 // Script
 //**************************************************************************************************
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 /// The move transaction script to be executed
 pub struct Script {
     /// The dependencies of `main`, i.e. of the transaction script
@@ -52,12 +55,14 @@ pub struct Script {
 //**************************************************************************************************
 
 /// Newtype for a name of a module
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct ModuleName(String);
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(tag = "dername")]
+pub struct ModuleName{ name: String }
 
 /// Newtype of the address + the module name
 /// `addr.m`
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub struct QualifiedModuleIdent {
     /// Name for the module. Will be unique among modules published under the same address
     pub name: ModuleName,
@@ -66,7 +71,8 @@ pub struct QualifiedModuleIdent {
 }
 
 /// A Move module
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub struct ModuleDefinition {
     /// name of the module
     pub name: ModuleName,
@@ -80,7 +86,8 @@ pub struct ModuleDefinition {
 
 /// Either a qualified module name like `addr.m` or `Transaction.m`, which refers to a module in
 /// the same transaction.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum ModuleIdent {
     Transaction(ModuleName),
     Qualified(QualifiedModuleIdent),
@@ -91,7 +98,8 @@ pub enum ModuleIdent {
 //**************************************************************************************************
 
 /// A dependency/import declaration
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub struct ImportDefinition {
     /// the dependency
     /// `addr.m` or `Transaction.m`
@@ -106,15 +114,15 @@ pub struct ImportDefinition {
 //**************************************************************************************************
 
 /// Newtype for a variable/local
-#[derive(Debug, PartialEq, Hash, Eq, Clone, Ord, PartialOrd)]
-pub struct Var(String);
+#[derive(Debug, PartialEq, Hash, Eq, Clone, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct Var{ name: String }
 
 /// The type of a variable with a location
 pub type Var_ = Spanned<Var>;
 
 /// New type that represents a type variable. Used to declare type formals & reference them.
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub struct TypeVar(pub String);
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
+pub struct TypeVar{ pub tvar: String }
 
 //**************************************************************************************************
 // Kinds
@@ -123,7 +131,7 @@ pub struct TypeVar(pub String);
 // TODO: This enum is completely equivalent to vm::file_format::Kind.
 //       Should we just use vm::file_format::Kind or replace both with a common one?
 /// The kind of a type. Analogous to `vm::file_format::Kind`.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum Kind {
     /// Represents the super set of all types.
     All,
@@ -138,7 +146,8 @@ pub enum Kind {
 //**************************************************************************************************
 
 /// The type of a single value
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum Type {
     /// `address`
     Address,
@@ -151,11 +160,11 @@ pub enum Type {
     /// `string`, currently unused
     String,
     /// A module defined struct
-    Struct(QualifiedStructIdent, Vec<Type>),
+    Struct{ ident: QualifiedStructIdent, typ: Vec<Type> },
     /// A reference type, the bool flag indicates whether the reference is mutable
-    Reference(bool, Box<Type>),
+    Reference{ is_mut: bool, typ: Box<Type> },
     /// A type parameter
-    TypeParameter(TypeVar),
+    TypeParameter{ tvar: TypeVar },
 }
 
 //**************************************************************************************************
@@ -164,7 +173,7 @@ pub enum Type {
 
 /// Identifier for a struct definition. Tells us where to look in the storage layer to find the
 /// code associated with the interface
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct QualifiedStructIdent {
     /// Module name and address in which the struct is contained
     pub module: ModuleName,
@@ -179,11 +188,13 @@ pub type Field = types::access_path::Field;
 pub type Fields<T> = BTreeMap<Field, T>;
 
 /// Newtype for the name of a struct
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct StructName(String);
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(tag = "dername")]
+pub struct StructName{ name: String }
 
 /// A Move struct
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub struct StructDefinition {
     /// The struct will have kind resource if `is_nominal_resource` is true
     /// and will be dependent on it's type arguments otherwise
@@ -197,7 +208,8 @@ pub struct StructDefinition {
 }
 
 /// The fields of a Move struct definition
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum StructDefinitionFields {
     /// The fields are declared
     Move { fields: Fields<Type> },
@@ -210,11 +222,13 @@ pub enum StructDefinitionFields {
 //**************************************************************************************************
 
 /// Newtype for the name of a function
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Clone)]
-pub struct FunctionName(String);
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
+pub struct FunctionName{ name: String }
 
 /// The signature of a function
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub struct FunctionSignature {
     /// Possibly-empty list of (formal name, formal type) pairs. Names are unique.
     pub formals: Vec<(Var, Type)>,
@@ -225,7 +239,8 @@ pub struct FunctionSignature {
 }
 
 /// Public or internal modifier for a procedure
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum FunctionVisibility {
     /// The procedure can be invoked anywhere
     /// `public`
@@ -236,11 +251,13 @@ pub enum FunctionVisibility {
 }
 
 /// The body of a Move function
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum FunctionBody {
     /// The body is declared
     /// `locals` are all of the declared locals
     /// `code` is the code that defines the procedure
+    #[serde(rename = "MoveCode")]
     Move {
         locals: Vec<(Var_, Type)>,
         code: Block,
@@ -250,7 +267,8 @@ pub enum FunctionBody {
 }
 
 /// A Move function/procedure
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub struct Function {
     /// The visibility (public or internal)
     pub visibility: FunctionVisibility,
@@ -271,14 +289,15 @@ pub struct Function {
 
 /// Builtin "function"-like operators that often have a signature not expressable in the
 /// type system and/or have access to some runtime/storage context
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum Builtin {
     /// Check if there is a struct object (`StructName` resolved by current module) associated with
     /// the given address
-    Exists(StructName, Vec<Type>),
+    Exists{ name: StructName, types: Vec<Type> },
     /// Get the struct object (`StructName` resolved by current module) associated with the given
     /// address
-    BorrowGlobal(StructName, Vec<Type>),
+    BorrowGlobal{ name: StructName, types: Vec<Type> },
     /// Returns the price per gas unit the current transaction is willing to pay
     GetTxnGasUnitPrice,
     /// Returns the maximum units of gas the current transaction is willing to use
@@ -296,16 +315,17 @@ pub enum Builtin {
     /// Initialize a previously empty address by publishing a resource of type Account
     CreateAccount,
     /// Remove a resource of the given type from the account with the given address
-    MoveFrom(StructName, Vec<Type>),
+    MoveFrom{ name: StructName, types: Vec<Type> },
     /// Publish an instantiated struct object into sender's account.
-    MoveToSender(StructName, Vec<Type>),
+    MoveToSender{ name: StructName, types: Vec<Type> },
 
     /// Convert a mutable reference into an immutable one
     Freeze,
 }
 
 /// Enum for different function calls
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum FunctionCall {
     /// functions defined in the host environment
     Builtin(Builtin),
@@ -320,7 +340,8 @@ pub enum FunctionCall {
 pub type FunctionCall_ = Spanned<FunctionCall>;
 
 /// Enum for Move lvalues
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum LValue {
     /// `x`
     Var(Var_),
@@ -333,16 +354,17 @@ pub type LValue_ = Spanned<LValue>;
 
 /// Enum for Move commands
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum Cmd {
     /// `l_1, ..., l_n = e`
-    Assign(Vec<LValue_>, Exp_),
+    Assign{ var: Vec<LValue_>, exp: Exp_ },
     /// `n { f_1: x_1, ... , f_j: x_j  } = e`
-    Unpack(StructName, Vec<Type>, Fields<Var_>, Box<Exp_>),
+    Unpack{ name: StructName, types: Vec<Type>, fields: Fields<Var_>, exp: Box<Exp_> },
     /// `abort e`
-    Abort(Option<Box<Exp_>>),
+    Abort{ exp: Option<Box<Exp_>> },
     /// `return e_1, ... , e_j`
-    Return(Box<Exp_>),
+    Return{ exp: Box<Exp_> },
     /// `break`
     Break,
     /// `continue`
@@ -353,7 +375,8 @@ pub enum Cmd {
 pub type Cmd_ = Spanned<Cmd>;
 
 /// Struct defining an if statement
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub struct IfElse {
     /// the if's condition
     pub cond: Exp_,
@@ -364,7 +387,8 @@ pub struct IfElse {
 }
 
 /// Struct defining a while statement
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub struct While {
     /// The condition for a while statement
     pub cond: Exp_,
@@ -373,13 +397,15 @@ pub struct While {
 }
 
 /// Struct defining a loop statement
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub struct Loop {
     /// The body of the loop
     pub block: Block,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 #[allow(clippy::large_enum_variant)]
 pub enum Statement {
     /// `c;`
@@ -394,7 +420,8 @@ pub enum Statement {
     EmptyStatement,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 /// `{ s }`
 pub struct Block {
     /// The statements that make up the block
@@ -407,18 +434,19 @@ pub struct Block {
 
 /// Bottom of the value hierarchy. These values can be trivially copyable and stored in statedb as a
 /// single entry.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum CopyableVal {
     /// An address in the global storage
-    Address(AccountAddress),
+    Address{ addr: AccountAddress },
     /// An unsigned 64-bit integer
-    U64(u64),
+    U64{ v: u64 },
     /// true or false
-    Bool(bool),
+    Bool{ v: bool },
     /// `b"<bytes>"`
-    ByteArray(ByteArray),
+    ByteArray{ bytes: ByteArray },
     /// Not yet supported in the parser
-    String(String),
+    String{ v: String },
 }
 
 /// The type of a value and its location
@@ -428,14 +456,16 @@ pub type CopyableVal_ = Spanned<CopyableVal>;
 pub type ExpFields = Fields<Exp_>;
 
 /// Enum for unary operators
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum UnaryOp {
     /// Boolean negation
     Not,
 }
 
 /// Enum for binary operators
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum BinOp {
     // u64 ops
     /// `+`
@@ -477,22 +507,23 @@ pub enum BinOp {
 }
 
 /// Enum for all expressions
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "dername")]
 pub enum Exp {
     /// `*e`
-    Dereference(Box<Exp_>),
+    Dereference{ exp: Box<Exp_> },
     /// `op e`
-    UnaryExp(UnaryOp, Box<Exp_>),
+    UnaryExp{ op: UnaryOp, exp: Box<Exp_> },
     /// `e_1 op e_2`
-    BinopExp(Box<Exp_>, BinOp, Box<Exp_>),
+    BinopExp{ e1: Box<Exp_>, op: BinOp, e2: Box<Exp_> },
     /// Wrapper to lift `CopyableVal` into `Exp`
     /// `v`
-    Value(CopyableVal_),
+    Value{ v: CopyableVal_ },
     /// Takes the given field values and instantiates the struct
     /// Returns a fresh `StructInstance` whose type and kind (resource or otherwise)
     /// as the current struct class (i.e., the class of the method we're currently executing).
     /// `n { f_1: e_1, ... , f_j: e_j }`
-    Pack(StructName, Vec<Type>, ExpFields),
+    Pack{ name: StructName, types: Vec<Type>, exp: ExpFields },
     /// `&e.f`, `&mut e.f`
     Borrow {
         /// mutable or not
@@ -503,15 +534,15 @@ pub enum Exp {
         field: Field,
     },
     /// `move(x)`
-    Move(Var_),
+    Move{ var: Var_ },
     /// `copy(x)`
-    Copy(Var_),
+    Copy{ var: Var_ },
     /// `&x` or `&mut x`
-    BorrowLocal(bool, Var_),
+    BorrowLocal{ is_mut: bool, var: Var_ },
     /// `f(e)` or `f(e_1, e_2, ..., e_j)`
-    FunctionCall(FunctionCall, Box<Exp_>),
+    FunctionCall{ call: FunctionCall, exp: Box<Exp_> },
     /// (e_1, e_2, e_3, ..., e_j)
-    ExprList(Vec<Exp_>),
+    ExprList{ exprs: Vec<Exp_> },
 }
 
 /// The type for a `Exp` and its location
@@ -562,7 +593,7 @@ impl ModuleName {
     /// Create a new `ModuleName` identifier from a string
     pub fn new(name: String) -> Self {
         assert!(name != "");
-        ModuleName(name)
+        ModuleName{ name }
     }
 
     /// String value for the current module handle
@@ -575,17 +606,17 @@ impl ModuleName {
 
     /// Returns the raw bytes of the module name's string value
     pub fn as_bytes(&self) -> Vec<u8> {
-        self.0.as_bytes().to_vec()
+        self.name.as_bytes().to_vec()
     }
 
     /// Returns a cloned copy of the module name's string value
     pub fn name(&self) -> String {
-        self.0.clone()
+        self.name.clone()
     }
 
     /// Accessor for the module name's string value
     pub fn name_ref(&self) -> &String {
-        &self.0
+        &self.name
     }
 }
 
@@ -643,12 +674,12 @@ impl ModuleDefinition {
 impl Type {
     /// Creates a new struct type
     pub fn r#struct(ident: QualifiedStructIdent, type_actuals: Vec<Type>) -> Type {
-        Type::Struct(ident, type_actuals)
+        Type::Struct{ ident, typ: type_actuals }
     }
 
     /// Creates a new reference type from its mutability and underlying type
     pub fn reference(is_mutable: bool, t: Type) -> Type {
-        Type::Reference(is_mutable, Box::new(t))
+        Type::Reference{ is_mut: is_mutable, typ: Box::new(t) }
     }
 
     /// Creates a new address type
@@ -704,22 +735,22 @@ impl ImportDefinition {
 impl StructName {
     /// Create a new `StructName` identifier from a string
     pub fn new(name: String) -> Self {
-        StructName(name)
+        StructName{ name }
     }
 
     /// Returns the raw bytes of the struct name's string value
     pub fn as_bytes(&self) -> Vec<u8> {
-        self.0.as_bytes().to_vec()
+        self.name.as_bytes().to_vec()
     }
 
     /// Returns a cloned copy of the struct name's string value
     pub fn name(&self) -> String {
-        self.0.clone()
+        self.name.clone()
     }
 
     /// Accessor for the name of the struct
     pub fn name_ref(&self) -> &String {
-        &self.0
+        &self.name
     }
 }
 
@@ -763,17 +794,17 @@ impl StructDefinition {
 impl FunctionName {
     /// Create a new `FunctionName` identifier from a string
     pub fn new(name: String) -> Self {
-        FunctionName(name)
+        FunctionName{ name }
     }
 
     /// Returns a cloned copy of the function name's string value
     pub fn name(&self) -> String {
-        self.0.clone()
+        self.name.clone()
     }
 
     /// Accessor for the name of the function
     pub fn name_ref(&self) -> &String {
-        &self.0
+        &self.name
     }
 }
 
@@ -816,7 +847,7 @@ impl Function {
 impl Var {
     /// Create a new `Var` identifier from a string
     pub fn new(s: &str) -> Self {
-        Var(s.to_string())
+        Var{ name: s.to_string() }
     }
 
     /// Create a new `Var_` identifier from a string with an empty location
@@ -826,7 +857,7 @@ impl Var {
 
     /// Accessor for the name of the var
     pub fn name(&self) -> &str {
-        &self.0
+        &self.name
     }
 }
 
@@ -849,12 +880,12 @@ impl FunctionCall {
 impl Cmd {
     /// Creates a command that returns no values
     pub fn return_empty() -> Self {
-        Cmd::Return(Box::new(Spanned::no_loc(Exp::ExprList(vec![]))))
+        Cmd::Return{ exp: Box::new(Spanned::no_loc(Exp::ExprList{ exprs: vec![] })) }
     }
 
     /// Creates a command that returns a single value
     pub fn return_(op: Exp_) -> Self {
-        Cmd::Return(Box::new(op))
+        Cmd::Return{ exp: Box::new(op) }
     }
 }
 
@@ -914,37 +945,37 @@ impl Block {
 impl Exp {
     /// Creates a new address `Exp` with no location information
     pub fn address(addr: AccountAddress) -> Exp_ {
-        Spanned::no_loc(Exp::Value(Spanned::no_loc(CopyableVal::Address(addr))))
+        Spanned::no_loc(Exp::Value{ v: Spanned::no_loc(CopyableVal::Address{ addr: addr }) })
     }
 
     /// Creates a new value `Exp` with no location information
     pub fn value(b: CopyableVal) -> Exp_ {
-        Spanned::no_loc(Exp::Value(Spanned::no_loc(b)))
+        Spanned::no_loc(Exp::Value{ v: Spanned::no_loc(b) })
     }
 
     /// Creates a new u64 `Exp` with no location information
     pub fn u64(i: u64) -> Exp_ {
-        Exp::value(CopyableVal::U64(i))
+        Exp::value(CopyableVal::U64{ v: i })
     }
 
     /// Creates a new bool `Exp` with no location information
     pub fn bool(b: bool) -> Exp_ {
-        Exp::value(CopyableVal::Bool(b))
+        Exp::value(CopyableVal::Bool{ v: b })
     }
 
     /// Creates a new bytearray `Exp` with no location information
     pub fn byte_array(buf: ByteArray) -> Exp_ {
-        Exp::value(CopyableVal::ByteArray(buf))
+        Exp::value(CopyableVal::ByteArray{ bytes: buf })
     }
 
     /// Creates a new pack/struct-instantiation `Exp` with no location information
     pub fn instantiate(n: StructName, tys: Vec<Type>, s: ExpFields) -> Exp_ {
-        Spanned::no_loc(Exp::Pack(n, tys, s))
+        Spanned::no_loc(Exp::Pack{ name: n, types: tys, exp: s })
     }
 
     /// Creates a new binary operator `Exp` with no location information
     pub fn binop(lhs: Exp_, op: BinOp, rhs: Exp_) -> Exp_ {
-        Spanned::no_loc(Exp::BinopExp(Box::new(lhs), op, Box::new(rhs)))
+        Spanned::no_loc(Exp::BinopExp{ e1: Box::new(lhs), op, e2: Box::new(rhs) })
     }
 
     /// Creates a new `e+e` `Exp` with no location information
@@ -959,7 +990,7 @@ impl Exp {
 
     /// Creates a new `*e` `Exp` with no location information
     pub fn dereference(e: Exp_) -> Exp_ {
-        Spanned::no_loc(Exp::Dereference(Box::new(e)))
+        Spanned::no_loc(Exp::Dereference{ exp: Box::new(e) })
     }
 
     /// Creates a new borrow field `Exp` with no location information
@@ -973,21 +1004,21 @@ impl Exp {
 
     /// Creates a new copy-local `Exp` with no location information
     pub fn copy(v: Var_) -> Exp_ {
-        Spanned::no_loc(Exp::Copy(v))
+        Spanned::no_loc(Exp::Copy{ var: v })
     }
 
     /// Creates a new move-local `Exp` with no location information
     pub fn move_(v: Var_) -> Exp_ {
-        Spanned::no_loc(Exp::Move(v))
+        Spanned::no_loc(Exp::Move{ var: v })
     }
 
     /// Creates a new function call `Exp` with no location information
     pub fn function_call(f: FunctionCall, e: Exp_) -> Exp_ {
-        Spanned::no_loc(Exp::FunctionCall(f, Box::new(e)))
+        Spanned::no_loc(Exp::FunctionCall{ call: f, exp: Box::new(e) })
     }
 
     pub fn expr_list(exps: Vec<Exp_>) -> Exp_ {
-        Spanned::no_loc(Exp::ExprList(exps))
+        Spanned::no_loc(Exp::ExprList{ exprs: exps })
     }
 }
 
@@ -1064,7 +1095,7 @@ where
 
 impl fmt::Display for TypeVar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.tvar)
     }
 }
 
@@ -1084,7 +1115,7 @@ impl fmt::Display for Kind {
 
 impl fmt::Display for ModuleName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -1133,13 +1164,13 @@ impl fmt::Display for Function {
 
 impl fmt::Display for StructName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.name)
     }
 }
 
 impl fmt::Display for FunctionName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -1220,18 +1251,18 @@ impl fmt::Display for Type {
             Type::Address => write!(f, "address"),
             Type::ByteArray => write!(f, "bytearray"),
             Type::String => write!(f, "string"),
-            Type::Struct(ident, tys) => write!(f, "{}{}", ident, format_type_actuals(tys)),
-            Type::Reference(is_mutable, t) => {
+            Type::Struct{ ident, typ: tys } => write!(f, "{}{}", ident, format_type_actuals(tys)),
+            Type::Reference{ is_mut: is_mutable, typ: t } => {
                 write!(f, "&{}{}", if *is_mutable { "mut " } else { "" }, t)
             }
-            Type::TypeParameter(s) => write!(f, "{}", s),
+            Type::TypeParameter{ tvar: s } => write!(f, "{}", s),
         }
     }
 }
 
 impl fmt::Display for Var {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -1239,8 +1270,8 @@ impl fmt::Display for Builtin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Builtin::CreateAccount => write!(f, "create_account"),
-            Builtin::Exists(t, tys) => write!(f, "exists<{}{}>", t, format_type_actuals(tys)),
-            Builtin::BorrowGlobal(t, tys) => {
+            Builtin::Exists{ name: t, types: tys } => write!(f, "exists<{}{}>", t, format_type_actuals(tys)),
+            Builtin::BorrowGlobal{ name: t, types: tys } => {
                 write!(f, "borrow_global<{}{}>", t, format_type_actuals(tys))
             }
             Builtin::GetTxnMaxGasUnits => write!(f, "get_txn_max_gas_units"),
@@ -1249,8 +1280,8 @@ impl fmt::Display for Builtin {
             Builtin::GetTxnSender => write!(f, "get_txn_sender"),
             Builtin::GetTxnSequenceNumber => write!(f, "get_txn_sequence_number"),
             Builtin::GetGasRemaining => write!(f, "get_gas_remaining"),
-            Builtin::MoveFrom(t, tys) => write!(f, "move_from<{}{}>", t, format_type_actuals(tys)),
-            Builtin::MoveToSender(t, tys) => {
+            Builtin::MoveFrom{ name: t, types: tys } => write!(f, "move_from<{}{}>", t, format_type_actuals(tys)),
+            Builtin::MoveToSender{ name: t, types: tys } => {
                 write!(f, "move_to_sender<{}{}>", t, format_type_actuals(tys))
             }
             Builtin::Freeze => write!(f, "freeze"),
@@ -1290,14 +1321,14 @@ impl fmt::Display for LValue {
 impl fmt::Display for Cmd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Cmd::Assign(var_list, e) => {
+            Cmd::Assign{ var: var_list, exp: e } => {
                 if var_list.is_empty() {
                     write!(f, "{};", e)
                 } else {
                     write!(f, "{} = ({});", intersperse(var_list, ", "), e)
                 }
             }
-            Cmd::Unpack(n, tys, bindings, e) => write!(
+            Cmd::Unpack{ name: n, types: tys, fields: bindings, exp: e } => write!(
                 f,
                 "{}{} {{ {} }} = {}",
                 n,
@@ -1310,9 +1341,9 @@ impl fmt::Display for Cmd {
                     )),
                 e
             ),
-            Cmd::Abort(None) => write!(f, "abort;"),
-            Cmd::Abort(Some(err)) => write!(f, "abort {};", err),
-            Cmd::Return(exps) => write!(f, "return {};", exps),
+            Cmd::Abort{ exp: None } => write!(f, "abort;"),
+            Cmd::Abort{ exp: Some(err) } => write!(f, "abort {};", err),
+            Cmd::Return{ exp: exps } => write!(f, "return {};", exps),
             Cmd::Break => write!(f, "break;"),
             Cmd::Continue => write!(f, "continue;"),
             Cmd::Exp(e) => write!(f, "({});", e),
@@ -1380,11 +1411,11 @@ impl fmt::Display for Block {
 impl fmt::Display for CopyableVal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CopyableVal::U64(v) => write!(f, "{}", v),
-            CopyableVal::Bool(v) => write!(f, "{}", v),
-            CopyableVal::ByteArray(v) => write!(f, "{}", v),
-            CopyableVal::Address(v) => write!(f, "0x{}", hex::encode(&v)),
-            CopyableVal::String(v) => write!(f, "{}", v),
+            CopyableVal::U64{ v } => write!(f, "{}", v),
+            CopyableVal::Bool{ v } => write!(f, "{}", v),
+            CopyableVal::ByteArray{ bytes } => write!(f, "{}", bytes),
+            CopyableVal::Address{ addr } => write!(f, "0x{}", hex::encode(&addr)),
+            CopyableVal::String{ v } => write!(f, "{}", v),
         }
     }
 }
@@ -1435,11 +1466,11 @@ impl fmt::Display for BinOp {
 impl fmt::Display for Exp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Exp::Dereference(e) => write!(f, "*({})", e),
-            Exp::UnaryExp(o, e) => write!(f, "({}{})", o, e),
-            Exp::BinopExp(e1, o, e2) => write!(f, "({} {} {})", o, e1, e2),
-            Exp::Value(v) => write!(f, "{}", v),
-            Exp::Pack(n, tys, s) => write!(
+            Exp::Dereference{ exp: e } => write!(f, "*({})", e),
+            Exp::UnaryExp{ op: o, exp: e } => write!(f, "({}{})", o, e),
+            Exp::BinopExp{ e1, op: o, e2 } => write!(f, "({} {} {})", o, e1, e2),
+            Exp::Value{ v } => write!(f, "{}", v),
+            Exp::Pack{ name: n, types: tys, exp: s } => write!(
                 f,
                 "{}{}{{{}}}",
                 n,
@@ -1460,13 +1491,13 @@ impl fmt::Display for Exp {
                 exp,
                 field
             ),
-            Exp::Move(v) => write!(f, "move({})", v),
-            Exp::Copy(v) => write!(f, "copy({})", v),
-            Exp::BorrowLocal(is_mutable, v) => {
+            Exp::Move{ var: v } => write!(f, "move({})", v),
+            Exp::Copy{ var: v } => write!(f, "copy({})", v),
+            Exp::BorrowLocal{ is_mut: is_mutable, var: v } => {
                 write!(f, "&{}{}", if *is_mutable { "mut " } else { "" }, v)
             }
-            Exp::FunctionCall(func, e) => write!(f, "{}({})", func, e),
-            Exp::ExprList(exps) => {
+            Exp::FunctionCall{ call: func, exp: e } => write!(f, "{}({})", func, e),
+            Exp::ExprList{ exprs: exps } => {
                 if exps.is_empty() {
                     write!(f, "()")
                 } else {

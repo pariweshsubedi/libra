@@ -1,0 +1,26 @@
+// Copyright (c) XXV Inc. dba Synthetic Minds
+// SPDX-License-Identifier: Apache-2.0
+
+import 0x0.LibraCoin;
+import 0x0.LibraAccount;
+import 0x0.MultiWallet2Of3;
+import 0x0.Sym;
+
+main() {
+    let o2: address;
+    let dst: address;
+    let sender: address;
+    let o2auth: u64;
+
+    o2 = Sym.fresh_address("owner2", 0x00000000000000000000000000000002);
+    dst = Sym.fresh_address("dst", 0x00000000000000000000000000000004);
+    sender = get_txn_sender();
+    assert(copy(sender) == copy(o2), 99);
+
+    o2auth = Sym.fresh_u64("o2auth", 21);
+
+    // have o1 authorize 21 for dst
+    MultiWallet2Of3.authorize(copy(o2auth), copy(dst));
+
+    return;
+}
